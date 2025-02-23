@@ -210,18 +210,34 @@ class TextToSpeechApp(QMainWindow):
         self.settings_btn.clicked.connect(self.open_settings)
         self.upload_voice_btn.clicked.connect(self.upload_voice)
         self.output_dir_btn.clicked.connect(self.select_output_directory)
+        self.model_combo.currentIndexChanged.connect(self.load_voice_list)
         
         # 加载语音列表
         self.load_voice_list()
         
     def load_voice_list(self):
         if not self.client:
+            QMessageBox.warning(self, "错误", "API客户端未初始化!")
             return
-            
+        
         try:
+            # 清空现有音色
+            self.voice_combo.clear()
+            
+            # 加载系统音色
+            selected_model = self.model_combo.currentData()
             voices = self.client.get_voice_list()
+            print(f"获取到的音色列表: {voices}")  # 调试信息
             for voice in voices.get('voices', []):
-                self.voice_combo.addItem(voice.get('name', ''), voice.get('id'))
+                if voice.get('model') == selected_model:  # 仅添加当前模型的音色
+                    self.voice_combo.addItem(voice.get('name', ''), voice.get('id'))
+            # 移除没有可用音色的提示
+            
+            # 添加默认音色选项
+            for model, voices in SiliconFlowClient.DEFAULT_VOICES.items():
+                if model == selected_model:
+                    for voice in voices:
+                        self.voice_combo.addItem(voice, voice)
         except Exception as e:
             QMessageBox.warning(self, "错误", f"加载语音列表失败: {str(e)}")
             
@@ -230,13 +246,19 @@ class TextToSpeechApp(QMainWindow):
             return
         
         try:
+            # 清空现有音色
+            self.voice_combo.clear()
+            
+            selected_model = self.model_combo.currentData()
             voices = self.client.get_voice_list()
             for voice in voices.get('voices', []):
-                self.voice_combo.addItem(voice.get('name', ''), voice.get('id'))
+                if voice.get('model') == selected_model:  # 仅添加当前模型的音色
+                    self.voice_combo.addItem(voice.get('name', ''), voice.get('id'))
             # 添加默认语音选项
             for model, voices in SiliconFlowClient.DEFAULT_VOICES.items():
-                for voice in voices:
-                    self.voice_combo.addItem(voice, voice)
+                if model == selected_model:
+                    for voice in voices:
+                        self.voice_combo.addItem(voice, voice)
         except Exception as e:
             QMessageBox.warning(self, "错误", f"加载语音列表失败: {str(e)}")
 

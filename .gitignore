@@ -6,3 +6,4 @@ data/
 *.pyd
 *.pyw
 *.pyz
+data/config.json
