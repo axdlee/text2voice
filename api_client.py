@@ -4,9 +4,9 @@ import os
 from typing import Optional, Dict, Any
 
 class SiliconFlowClient:
-    def __init__(self, api_key: str):
+    def __init__(self, api_key: str, api_url: Optional[str] = None):
         self.api_key = api_key
-        self.base_url = "https://api.siliconflow.cn/v1"
+        self.base_url = api_url or "https://api.siliconflow.cn/v1"
         self.headers = {
             "Authorization": f"Bearer {api_key}",
             "Content-Type": "application/json"
@@ -18,10 +18,12 @@ class SiliconFlowClient:
         """
         url = f"{self.base_url}/audio/speech"
         payload = {
-            "text": text,
+            "model": "FunAudioLLM/CosyVoice2-0.5B",
+            "input": text,
+            "response_format": "mp3"
         }
         if voice_id:
-            payload["voice_id"] = voice_id
+            payload["voice"] = voice_id
             
         response = requests.post(url, headers=self.headers, json=payload)
         response.raise_for_status()
@@ -31,7 +33,7 @@ class SiliconFlowClient:
         """
         获取可用的语音列表
         """
-        url = f"{self.base_url}/audio/voices"
+        url = f"{self.base_url}/audio/voice/list"
         response = requests.get(url, headers=self.headers)
         response.raise_for_status()
         return response.json()
@@ -40,7 +42,7 @@ class SiliconFlowClient:
         """
         删除指定的语音
         """
-        url = f"{self.base_url}/audio/voices/{voice_id}"
+        url = f"{self.base_url}/audio/voice/{voice_id}"
         response = requests.delete(url, headers=self.headers)
         response.raise_for_status()
         return response.json()
@@ -49,17 +51,19 @@ class SiliconFlowClient:
         """
         上传语音文件
         """
-        url = f"{self.base_url}/audio/voices"
+        url = f"{self.base_url}/audio/voice"
+        with open(file_path, 'rb') as f:
+            audio_data = f.read()
+            
         files = {
-            'file': open(file_path, 'rb')
+            'audio': ('audio.mp3', audio_data, 'audio/mpeg')
         }
         data = {
-            'name': name
+            'model': 'fishaudio/fish-speech-1.5',
+            'customName': name,
+            'text': '在一无所知中, 梦里的一天结束了，一个新的轮回便会开始'
         }
-        headers = {
-            "Authorization": f"Bearer {self.api_key}"
-        }
-        response = requests.post(url, headers=headers, data=data, files=files)
+        response = requests.post(url, headers=self.headers, data=data, files=files)
         response.raise_for_status()
         return response.json()
         
@@ -71,9 +75,9 @@ class SiliconFlowClient:
         files = {
             'file': open(file_path, 'rb')
         }
-        headers = {
-            "Authorization": f"Bearer {self.api_key}"
+        data = {
+            'model': 'FunAudioLLM/SenseVoiceSmall'
         }
-        response = requests.post(url, headers=headers, files=files)
+        response = requests.post(url, headers=self.headers, data=data, files=files)
         response.raise_for_status()
         return response.json() 

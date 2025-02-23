@@ -44,7 +44,10 @@ class SettingsDialog(QDialog):
         layout.addRow("API密钥:", self.api_key_input)
         layout.addRow("API地址:", self.api_url_input)
         
-        buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        buttons = QDialogButtonBox(
+            QDialogButtonBox.StandardButton.Ok | 
+            QDialogButtonBox.StandardButton.Cancel
+        )
         buttons.accepted.connect(self.accept)
         buttons.rejected.connect(self.reject)
         
