@@ -14,6 +14,7 @@ from audio_player import AudioPlayer
 from typing import Dict, Any
 import base64
 import re
+import time
 
 # 加载环境变量
 load_dotenv()
@@ -415,9 +416,37 @@ class TextToSpeechApp(QMainWindow):
         self.progress_bar.setVisible(False)
         
         try:
+            # 弹出对话框让用户输入文件名
+            new_file_name, ok = QInputDialog.getText(self, '保存文件', '请输入文件名:', QLineEdit.Normal, 'output')
+            if not ok or not new_file_name:
+                # 如果用户没有输入文件名，自动生成一个不重复的文件名
+                selected_format = self.format_combo.currentText()
+                if selected_format == 'mp3':
+                    file_extension = 'mp3'
+                elif selected_format == 'opus':
+                    file_extension = 'opus'
+                elif selected_format == 'wav':
+                    file_extension = 'wav'
+                elif selected_format == 'pcm':
+                    file_extension = 'pcm'
+                else:
+                    file_extension = 'mp3'  # 默认值
+                new_file_name = f'output_{int(time.time())}.{file_extension}'
+            else:
+                # 根据选择的格式设置文件扩展名
+                selected_format = self.format_combo.currentText()
+                if selected_format == 'mp3':
+                    new_file_name += '.mp3'
+                elif selected_format == 'opus':
+                    new_file_name += '.opus'
+                elif selected_format == 'wav':
+                    new_file_name += '.wav'
+                elif selected_format == 'pcm':
+                    new_file_name += '.pcm'
+
             # 保存到用户选择的输出目录
             os.makedirs(self.output_directory, exist_ok=True)
-            audio_path = os.path.join(self.output_directory, 'output.mp3')
+            audio_path = os.path.join(self.output_directory, new_file_name)
             
             # 如果是URL，下载音频
             if isinstance(audio_data, str) and audio_data.startswith('http'):
@@ -432,9 +461,9 @@ class TextToSpeechApp(QMainWindow):
                 f.write(audio_content)
                 
             self.current_audio_url = audio_path
-            QMessageBox.information(self, "成功", "文本转换完成!")
+            QMessageBox.information(self, '成功', f'文本转换完成! 文件已保存为: {new_file_name}')
         except Exception as e:
-            QMessageBox.warning(self, "错误", f"保存音频文件失败: {str(e)}")
+            QMessageBox.warning(self, '错误', f'保存音频文件失败: {str(e)}')
             
     def handle_conversion_error(self, error_msg):
         self.convert_btn.setEnabled(True)
