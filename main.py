@@ -79,13 +79,24 @@ class TextToSpeechApp(QMainWindow):
     def __init__(self):
         super().__init__()
         self.config_file = 'data/config.json'
-        self.api_key, self.api_url = self.load_config()
-        self.client = SiliconFlowClient(self.api_key, self.api_url) if self.api_key else None
+        self.api_key = None
+        self.api_url = None
+        self.client = None
         self.audio_player = AudioPlayer()
         self.current_audio_url = None
         self.conversion_thread = None
+        
+        # 先创建UI
         self.initUI()
         
+        # 再加载配置
+        self.load_config()
+        
+        # 初始化客户端
+        if self.api_key:
+            self.client = SiliconFlowClient(self.api_key, self.api_url)
+            self.load_voice_list()
+
     def initUI(self):
         self.setWindowTitle('文本转语音工具')
         self.setGeometry(100, 100, 800, 600)
@@ -308,14 +319,50 @@ class TextToSpeechApp(QMainWindow):
         self.play_btn.setEnabled(True)
         self.stop_btn.setEnabled(False)
         
+    def load_config(self):
+        if os.path.exists(self.config_file):
+            with open(self.config_file, 'r') as f:
+                config = json.load(f)
+                self.api_key = config.get('api_key')
+                self.api_url = config.get('api_url')
+                
+                # 加载模型设置
+                if 'model_settings' in config:
+                    model_settings = config['model_settings']
+                    for model, settings in model_settings.items():
+                        # 如果是当前选中的模型，应用其设置
+                        if model == self.model_combo.currentData():
+                            # 设置语音
+                            if settings.get('voice_id'):
+                                index = self.voice_combo.findData(settings.get('voice_id'))
+                                if index >= 0:
+                                    self.voice_combo.setCurrentIndex(index)
+                            # 设置其他参数
+                            self.sample_rate_input.setText(str(settings.get('sample_rate', 32000)))
+                            self.speed_input.setText(str(settings.get('speed', 1.0)))
+                            self.gain_input.setText(str(settings.get('gain', 0.0)))
+                            self.format_combo.setCurrentText(settings.get('response_format', 'mp3'))
+                            break
+
     def save_config(self):
-        config = {
-            'api_key': self.api_key,
-            'api_url': self.api_url,
-            'model_settings': {}
-        }
-        
-        # 按模型维度存储设置
+        # 读取现有配置（如果存在）
+        config = {}
+        if os.path.exists(self.config_file):
+            with open(self.config_file, 'r') as f:
+                try:
+                    config = json.load(f)
+                except:
+                    pass
+
+        # 更新API设置
+        config['api_key'] = self.api_key
+        config['api_url'] = self.api_url
+
+        # 确保model_settings存在
+        if 'model_settings' not in config:
+            config['model_settings'] = {}
+
+        # 更新当前模型的设置
         selected_model = self.model_combo.currentData()
         config['model_settings'][selected_model] = {
             'voice_id': self.voice_combo.currentData(),
@@ -325,33 +372,10 @@ class TextToSpeechApp(QMainWindow):
             'response_format': self.format_combo.currentText()
         }
         
+        # 保存配置
         os.makedirs('data', exist_ok=True)
         with open(self.config_file, 'w') as f:
             json.dump(config, f, ensure_ascii=False, indent=4)
-
-    def load_config(self):
-        if os.path.exists(self.config_file):
-            with open(self.config_file, 'r') as f:
-                config = json.load(f)
-                self.api_key = config.get('api_key')
-                self.api_url = config.get('api_url')
-                
-                # 加载上次的设置
-                selected_model = self.model_combo.currentData()
-                if 'model_settings' in config and selected_model in config['model_settings']:
-                    last_settings = config['model_settings'][selected_model]
-                    # 设置语音
-                    if last_settings.get('voice_id'):
-                        index = self.voice_combo.findData(last_settings.get('voice_id'))
-                        if index >= 0:
-                            self.voice_combo.setCurrentIndex(index)
-                    # 设置其他参数
-                    self.sample_rate_input.setText(str(last_settings.get('sample_rate', 32000)))
-                    self.speed_input.setText(str(last_settings.get('speed', 1.0)))
-                    self.gain_input.setText(str(last_settings.get('gain', 0.0)))
-                    self.format_combo.setCurrentText(last_settings.get('response_format', 'mp3'))
-                return self.api_key, self.api_url
-        return None, None
 
     def open_settings(self):
         dialog = SettingsDialog(self.api_key, self.api_url)
