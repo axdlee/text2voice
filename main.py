@@ -77,6 +77,58 @@ class SettingsDialog(QDialog):
     def get_settings(self):
         return self.api_key_input.text(), self.api_url_input.text()
 
+class UploadVoiceDialog(QDialog):
+    def __init__(self, models, selected_model, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("上传音色")
+        self.layout = QVBoxLayout()
+
+        # 音频选择
+        self.file_path_input = QLineEdit()
+        self.file_path_input.setPlaceholderText("选择音频文件...")
+        self.browse_button = QPushButton("浏览")
+        self.browse_button.clicked.connect(self.browse_file)
+
+        # 模型选择
+        self.model_combo = QComboBox()
+        for model in models:
+            self.model_combo.addItem(model[1], model[0])  # 显示名称和数据
+        self.model_combo.setCurrentData(selected_model)  # 设置默认选中模型
+
+        # 音色名称输入
+        self.custom_name_input = QLineEdit()
+        self.custom_name_input.setPlaceholderText("输入音色名称...")
+
+        # 文本输入
+        self.text_input = QTextEdit()
+        self.text_input.setPlaceholderText("输入要转换的文本...")
+
+        # 添加控件到布局
+        self.layout.addWidget(self.file_path_input)
+        self.layout.addWidget(self.browse_button)
+        self.layout.addWidget(QLabel("选择模型:"))
+        self.layout.addWidget(self.model_combo)
+        self.layout.addWidget(QLabel("音色名称:"))
+        self.layout.addWidget(self.custom_name_input)
+        self.layout.addWidget(QLabel("要转换的文本:"))
+        self.layout.addWidget(self.text_input)
+
+        # 确认和取消按钮
+        self.button_box = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
+        self.button_box.accepted.connect(self.accept)
+        self.button_box.rejected.connect(self.reject)
+        self.layout.addWidget(self.button_box)
+
+        self.setLayout(self.layout)
+
+    def browse_file(self):
+        file_path, _ = QFileDialog.getOpenFileName(self, "选择音频文件", "", "Audio Files (*.mp3 *.wav)")
+        if file_path:
+            self.file_path_input.setText(file_path)
+
+    def get_data(self):
+        return self.file_path_input.text(), self.custom_name_input.text(), self.text_input.toPlainText(), self.model_combo.currentData()
+
 class TextToSpeechApp(QMainWindow):
     def __init__(self):
         super().__init__()
@@ -440,42 +492,35 @@ class TextToSpeechApp(QMainWindow):
             self.save_config()  # 保存配置文件
         
     def upload_voice(self):
-        file_path, _ = QFileDialog.getOpenFileName(self, "选择音频文件", "", "Audio Files (*.mp3 *.wav)")
-        if file_path:
-            # 获取音色名称
-            name, ok = QInputDialog.getText(self, "输入音色名称", "音色名称:")
-            if ok:
-                # 验证customName的有效性
-                if not re.match(r'^[a-zA-Z0-9_-]{1,64}$', name):
-                    QMessageBox.warning(self, "错误", "音色名称无效。只能包含字母、数字、下划线和连字符，且不能超过64个字符。")
-                    return
-                # 获取用户输入的文本
-                text, ok = QInputDialog.getText(self, "输入要转换的文本", "文本:")
-                if not ok or not text:
-                    QMessageBox.warning(self, "错误", "请输入要转换的文本!")
-                    return
-                try:
-                    # 获取当前选中的模型
-                    model = self.model_combo.currentData()
-                    
-                    # 读取音频文件
-                    with open(file_path, 'rb') as f:
-                        audio_data = f.read()
-                    
-                    # 构建multipart/form-data格式的音频数据
-                    audio_content = f'data:audio/mpeg;base64,{base64.b64encode(audio_data).decode("utf-8")}'
-                    
-                    response = self.client.upload_voice(
-                        audio=audio_content,
-                        model=model,
-                        customName=name,
-                        text=text  # 使用用户输入的文本
-                    )
-                    QMessageBox.information(self, "成功", "音色上传成功!")
-                    self.load_voice_list()  # 重新加载音色列表
-                except Exception as e:
-                    QMessageBox.warning(self, "错误", f"上传失败: {str(e)}")
-                    print(f"详细错误信息: {e}")
+        dialog = UploadVoiceDialog([(self.model_combo.itemText(i), self.model_combo.itemData(i)) for i in range(self.model_combo.count())], self.model_combo.currentData(), self)
+        if dialog.exec() == QDialog.DialogCode.Accepted:
+            file_path, name, text, model = dialog.get_data()
+            # 验证customName的有效性
+            if not re.match(r'^[a-zA-Z0-9_-]{1,64}$', name):
+                QMessageBox.warning(self, "错误", "音色名称无效。只能包含字母、数字、下划线和连字符，且不能超过64个字符。")
+                return
+            if not text:
+                QMessageBox.warning(self, "错误", "请输入要转换的文本!")
+                return
+            try:
+                # 读取音频文件
+                with open(file_path, 'rb') as f:
+                    audio_data = f.read()
+                
+                # 构建multipart/form-data格式的音频数据
+                audio_content = f'data:audio/mpeg;base64,{base64.b64encode(audio_data).decode("utf-8")}'
+                
+                response = self.client.upload_voice(
+                    audio=audio_content,
+                    model=model,
+                    customName=name,
+                    text=text  # 使用用户输入的文本
+                )
+                QMessageBox.information(self, "成功", "音色上传成功!")
+                self.load_voice_list()  # 重新加载音色列表
+            except Exception as e:
+                QMessageBox.warning(self, "错误", f"上传失败: {str(e)}")
+                print(f"详细错误信息: {e}")
         
     def select_output_directory(self):
         directory = QFileDialog.getExistingDirectory(self, "选择输出目录", self.output_directory)
