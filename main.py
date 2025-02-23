@@ -70,8 +70,8 @@ class SettingsDialog(QDialog):
 class TextToSpeechApp(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.api_key = os.getenv('SILICON_API_KEY')
-        self.api_url = os.getenv('SILICON_API_URL')
+        self.config_file = 'data/config.json'
+        self.api_key, self.api_url = self.load_config()
         self.client = SiliconFlowClient(self.api_key, self.api_url) if self.api_key else None
         self.audio_player = AudioPlayer()
         self.current_audio_url = None
@@ -290,11 +290,28 @@ class TextToSpeechApp(QMainWindow):
         self.play_btn.setEnabled(True)
         self.stop_btn.setEnabled(False)
         
+    def load_config(self):
+        if os.path.exists(self.config_file):
+            with open(self.config_file, 'r') as f:
+                config = json.load(f)
+                return config.get('api_key'), config.get('api_url')
+        return None, None
+
+    def save_config(self):
+        config = {
+            'api_key': self.api_key,
+            'api_url': self.api_url
+        }
+        os.makedirs('data', exist_ok=True)
+        with open(self.config_file, 'w') as f:
+            json.dump(config, f, ensure_ascii=False, indent=4)
+
     def open_settings(self):
         dialog = SettingsDialog(self.api_key, self.api_url)
         if dialog.exec() == QDialog.DialogCode.Accepted:
             self.api_key, self.api_url = dialog.get_settings()
             self.client = SiliconFlowClient(self.api_key, self.api_url)
+            self.save_config()  # 保存配置文件
         
     def upload_voice(self):
         file_path, _ = QFileDialog.getOpenFileName(self, "选择音频文件", "", "Audio Files (*.mp3 *.wav)")
