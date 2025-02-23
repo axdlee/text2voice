@@ -12,6 +12,49 @@ class SiliconFlowClient:
         "RVC-Boss/GPT-SoVITS": "GPT-SoVITS (赠送余额付费)"
     }
     
+    DEFAULT_VOICES = {
+        "fishaudio/fish-speech-1.5": [
+            "fishaudio/fish-speech-1.5:alex",
+            "fishaudio/fish-speech-1.5:anna",
+            "fishaudio/fish-speech-1.5:bella",
+            "fishaudio/fish-speech-1.5:benjamin",
+            "fishaudio/fish-speech-1.5:charles",
+            "fishaudio/fish-speech-1.5:claire",
+            "fishaudio/fish-speech-1.5:david",
+            "fishaudio/fish-speech-1.5:diana"
+        ],
+        "fishaudio/fish-speech-1.4": [
+            "fishaudio/fish-speech-1.4:alex",
+            "fishaudio/fish-speech-1.4:anna",
+            "fishaudio/fish-speech-1.4:bella",
+            "fishaudio/fish-speech-1.4:benjamin",
+            "fishaudio/fish-speech-1.4:charles",
+            "fishaudio/fish-speech-1.4:claire",
+            "fishaudio/fish-speech-1.4:david",
+            "fishaudio/fish-speech-1.4:diana"
+        ],
+        "FunAudioLLM/CosyVoice2-0.5B": [
+            "FunAudioLLM/CosyVoice2-0.5B:alex",
+            "FunAudioLLM/CosyVoice2-0.5B:anna",
+            "FunAudioLLM/CosyVoice2-0.5B:bella",
+            "FunAudioLLM/CosyVoice2-0.5B:benjamin",
+            "FunAudioLLM/CosyVoice2-0.5B:charles",
+            "FunAudioLLM/CosyVoice2-0.5B:claire",
+            "FunAudioLLM/CosyVoice2-0.5B:david",
+            "FunAudioLLM/CosyVoice2-0.5B:diana"
+        ],
+        "RVC-Boss/GPT-SoVITS": [
+            "RVC-Boss/GPT-SoVITS:alex",
+            "RVC-Boss/GPT-SoVITS:anna",
+            "RVC-Boss/GPT-SoVITS:bella",
+            "RVC-Boss/GPT-SoVITS:benjamin",
+            "RVC-Boss/GPT-SoVITS:charles",
+            "RVC-Boss/GPT-SoVITS:claire",
+            "RVC-Boss/GPT-SoVITS:david",
+            "RVC-Boss/GPT-SoVITS:diana"
+        ]
+    }
+    
     def __init__(self, api_key: str, api_url: Optional[str] = None):
         self.api_key = api_key
         self.base_url = api_url or "https://api.siliconflow.cn/v1"
@@ -19,29 +62,49 @@ class SiliconFlowClient:
             "Authorization": f"Bearer {api_key}"
         }
         
-    def create_speech(self, text: str, voice_id: Optional[str] = None, model: Optional[str] = None) -> Dict[str, Any]:
+    def create_speech(self, text: str, voice_id: Optional[str] = None, model: Optional[str] = None, response_format: str = "mp3", sample_rate: int = 32000, speed: float = 1, gain: float = 0) -> Dict[str, Any]:
         """
         将文本转换为语音
         """
         url = f"{self.base_url}/audio/speech"
         
-        # 设置Content-Type为multipart/form-data
+        # 设置请求头
         headers = self.headers.copy()
+        headers["Content-Type"] = "application/json"
         
-        # 准备表单数据
+        # 确定使用的模型
+        selected_model = model or self.DEFAULT_MODEL
+        
+        # 准备请求数据
         data = {
-            "model": model or self.DEFAULT_MODEL,
+            "model": selected_model,
             "input": text,
-            "response_format": "mp3",
-            "sample_rate": 44100,
-            "stream": False
+            "voice": voice_id or self.DEFAULT_VOICES[selected_model][0],  # 使用默认语音
+            "response_format": response_format,
+            "sample_rate": sample_rate,
+            "stream": True,
+            "speed": speed,
+            "gain": gain
         }
-        
-        if voice_id:
-            data["voice"] = voice_id
             
-        response = requests.post(url, headers=headers, data=data)
+        # 打印调试信息
+        print(f"请求URL: {url}")
+        print(f"请求头: {headers}")
+        print(f"请求数据: {data}")
+        
+        # 发送请求
+        response = requests.post(url, headers=headers, json=data)
+        
+        # 如果是400错误，打印详细的错误信息
+        if response.status_code == 400:
+            print(f"错误响应: {response.text}")
+            
         response.raise_for_status()
+        
+        # 如果响应是二进制数据，直接返回
+        if response.headers.get('content-type', '').startswith('audio/'):
+            return response.content
+            
         return response.json()
         
     def get_voice_list(self) -> Dict[str, Any]:

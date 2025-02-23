@@ -17,20 +17,24 @@ from typing import Dict, Any
 load_dotenv()
 
 class ConversionWorker(QThread):
-    finished = pyqtSignal(str)
+    finished = pyqtSignal(object)  # 改为object类型，可以传递二进制数据
     error = pyqtSignal(str)
     
-    def __init__(self, client, text, voice_id=None, model=None):
+    def __init__(self, client, text, voice_id=None, model=None, sample_rate=None, speed=None, gain=None):
         super().__init__()
         self.client = client
         self.text = text
         self.voice_id = voice_id
         self.model = model
+        self.sample_rate = sample_rate
+        self.speed = speed
+        self.gain = gain
         
     def run(self):
         try:
-            result = self.client.create_speech(self.text, self.voice_id, self.model)
-            self.finished.emit(result.get('url', ''))
+            result = self.client.create_speech(self.text, self.voice_id, self.model, self.sample_rate, self.speed, self.gain)
+            # 直接发送结果，无论是JSON还是二进制数据
+            self.finished.emit(result)
         except Exception as e:
             self.error.emit(str(e))
 
@@ -115,6 +119,20 @@ class TextToSpeechApp(QMainWindow):
         left_layout.addWidget(QLabel("选择语音:"))
         left_layout.addWidget(self.voice_combo)
         
+        # 添加可选语音
+        self.update_voice_options()
+        
+        # 其他参数输入
+        self.sample_rate_input = QLineEdit("32000")
+        self.speed_input = QLineEdit("1")
+        self.gain_input = QLineEdit("0")
+        left_layout.addWidget(QLabel("采样率:"))
+        left_layout.addWidget(self.sample_rate_input)
+        left_layout.addWidget(QLabel("倍速:"))
+        left_layout.addWidget(self.speed_input)
+        left_layout.addWidget(QLabel("音量增益:"))
+        left_layout.addWidget(self.gain_input)
+        
         # 进度条
         self.progress_bar = QProgressBar()
         self.progress_bar.setVisible(False)
@@ -175,6 +193,21 @@ class TextToSpeechApp(QMainWindow):
         except Exception as e:
             QMessageBox.warning(self, "错误", f"加载语音列表失败: {str(e)}")
             
+    def update_voice_options(self):
+        if not self.client:
+            return
+        
+        try:
+            voices = self.client.get_voice_list()
+            for voice in voices.get('voices', []):
+                self.voice_combo.addItem(voice.get('name', ''), voice.get('id'))
+            # 添加默认语音选项
+            for model, voices in SiliconFlowClient.DEFAULT_VOICES.items():
+                for voice in voices:
+                    self.voice_combo.addItem(voice, voice)
+        except Exception as e:
+            QMessageBox.warning(self, "错误", f"加载语音列表失败: {str(e)}")
+
     def convert_text(self):
         if not self.client:
             QMessageBox.warning(self, "错误", "请设置API密钥!")
@@ -196,36 +229,45 @@ class TextToSpeechApp(QMainWindow):
             if reply == QMessageBox.StandardButton.No:
                 return
         
+        sample_rate = int(self.sample_rate_input.text())
+        speed = float(self.speed_input.text())
+        gain = float(self.gain_input.text())
+        
         self.convert_btn.setEnabled(False)
         self.progress_bar.setVisible(True)
         self.progress_bar.setRange(0, 0)  # 显示忙碌状态
         
-        self.conversion_thread = ConversionWorker(self.client, text, voice_id, model)
+        self.conversion_thread = ConversionWorker(self.client, text, voice_id, model, sample_rate, speed, gain)
         self.conversion_thread.finished.connect(self.handle_conversion_finished)
         self.conversion_thread.error.connect(self.handle_conversion_error)
         self.conversion_thread.start()
         
-    def handle_conversion_finished(self, audio_url):
-        self.current_audio_url = audio_url
+    def handle_conversion_finished(self, audio_data):
         self.convert_btn.setEnabled(True)
         self.play_btn.setEnabled(True)
         self.progress_bar.setVisible(False)
         
-        # 下载音频文件
         try:
-            response = requests.get(audio_url)
-            response.raise_for_status()
-            
             # 保存到临时文件
             os.makedirs('temp', exist_ok=True)
             audio_path = os.path.join('temp', 'output.mp3')
+            
+            # 如果是URL，下载音频
+            if isinstance(audio_data, str) and audio_data.startswith('http'):
+                response = requests.get(audio_data)
+                response.raise_for_status()
+                audio_content = response.content
+            else:
+                # 如果是二进制数据，直接使用
+                audio_content = audio_data
+                
             with open(audio_path, 'wb') as f:
-                f.write(response.content)
+                f.write(audio_content)
                 
             self.current_audio_url = audio_path
             QMessageBox.information(self, "成功", "文本转换完成!")
         except Exception as e:
-            QMessageBox.warning(self, "错误", f"下载音频文件失败: {str(e)}")
+            QMessageBox.warning(self, "错误", f"保存音频文件失败: {str(e)}")
             
     def handle_conversion_error(self, error_msg):
         self.convert_btn.setEnabled(True)
