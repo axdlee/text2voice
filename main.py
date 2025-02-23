@@ -20,7 +20,7 @@ class ConversionWorker(QThread):
     finished = pyqtSignal(object)  # 改为object类型，可以传递二进制数据
     error = pyqtSignal(str)
     
-    def __init__(self, client, text, voice_id=None, model=None, sample_rate=None, speed=None, gain=None):
+    def __init__(self, client, text, voice_id=None, model=None, sample_rate=32000, speed=1.0, gain=0.0, response_format="mp3"):
         super().__init__()
         self.client = client
         self.text = text
@@ -29,11 +29,19 @@ class ConversionWorker(QThread):
         self.sample_rate = sample_rate
         self.speed = speed
         self.gain = gain
+        self.response_format = response_format
         
     def run(self):
         try:
-            result = self.client.create_speech(self.text, self.voice_id, self.model, self.sample_rate, self.speed, self.gain)
-            # 直接发送结果，无论是JSON还是二进制数据
+            result = self.client.create_speech(
+                text=self.text,
+                voice_id=self.voice_id,
+                model=self.model,
+                response_format=self.response_format,
+                sample_rate=self.sample_rate,
+                speed=self.speed,
+                gain=self.gain
+            )
             self.finished.emit(result)
         except Exception as e:
             self.error.emit(str(e))
@@ -121,6 +129,15 @@ class TextToSpeechApp(QMainWindow):
         
         # 添加可选语音
         self.update_voice_options()
+        
+        # 添加音频格式选择下拉框
+        self.format_combo = QComboBox()
+        self.format_combo.addItem("mp3")
+        self.format_combo.addItem("opus")
+        self.format_combo.addItem("wav")
+        self.format_combo.addItem("pcm")
+        left_layout.addWidget(QLabel("选择音频格式:"))
+        left_layout.addWidget(self.format_combo)
         
         # 其他参数输入
         self.sample_rate_input = QLineEdit("32000")
@@ -232,12 +249,13 @@ class TextToSpeechApp(QMainWindow):
         sample_rate = int(self.sample_rate_input.text())
         speed = float(self.speed_input.text())
         gain = float(self.gain_input.text())
+        response_format = self.format_combo.currentText()  # 获取所选音频格式
         
         self.convert_btn.setEnabled(False)
         self.progress_bar.setVisible(True)
         self.progress_bar.setRange(0, 0)  # 显示忙碌状态
         
-        self.conversion_thread = ConversionWorker(self.client, text, voice_id, model, sample_rate, speed, gain)
+        self.conversion_thread = ConversionWorker(self.client, text, voice_id, model, sample_rate, speed, gain, response_format)
         self.conversion_thread.finished.connect(self.handle_conversion_finished)
         self.conversion_thread.error.connect(self.handle_conversion_error)
         self.conversion_thread.start()
@@ -294,13 +312,36 @@ class TextToSpeechApp(QMainWindow):
         if os.path.exists(self.config_file):
             with open(self.config_file, 'r') as f:
                 config = json.load(f)
+                # 加载上次的设置
+                if 'last_settings' in config:
+                    last_settings = config['last_settings']
+                    # 设置模型
+                    index = self.model_combo.findData(last_settings.get('model'))
+                    if index >= 0:
+                        self.model_combo.setCurrentIndex(index)
+                    # 设置语音
+                    if last_settings.get('voice_id'):
+                        index = self.voice_combo.findData(last_settings.get('voice_id'))
+                        if index >= 0:
+                            self.voice_combo.setCurrentIndex(index)
+                    # 设置其他参数
+                    self.sample_rate_input.setText(str(last_settings.get('sample_rate', 32000)))
+                    self.speed_input.setText(str(last_settings.get('speed', 1.0)))
+                    self.gain_input.setText(str(last_settings.get('gain', 0.0)))
                 return config.get('api_key'), config.get('api_url')
         return None, None
 
     def save_config(self):
         config = {
             'api_key': self.api_key,
-            'api_url': self.api_url
+            'api_url': self.api_url,
+            'last_settings': {
+                'model': self.model_combo.currentData(),
+                'voice_id': self.voice_combo.currentData(),
+                'sample_rate': int(self.sample_rate_input.text()),
+                'speed': float(self.speed_input.text()),
+                'gain': float(self.gain_input.text())
+            }
         }
         os.makedirs('data', exist_ok=True)
         with open(self.config_file, 'w') as f:

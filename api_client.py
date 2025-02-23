@@ -80,11 +80,11 @@ class SiliconFlowClient:
             "model": selected_model,
             "input": text,
             "voice": voice_id or self.DEFAULT_VOICES[selected_model][0],  # 使用默认语音
-            "response_format": response_format,
-            "sample_rate": sample_rate,
+            "response_format": response_format,  # 确保这是字符串类型
+            "sample_rate": int(sample_rate),  # 确保这是整数类型
             "stream": True,
-            "speed": speed,
-            "gain": gain
+            "speed": float(speed),  # 确保这是浮点数类型
+            "gain": float(gain)  # 确保这是浮点数类型
         }
             
         # 打印调试信息
