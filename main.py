@@ -12,6 +12,8 @@ from dotenv import load_dotenv
 from api_client import SiliconFlowClient
 from audio_player import AudioPlayer
 from typing import Dict, Any
+import base64
+import re
 
 # 加载环境变量
 load_dotenv()
@@ -440,14 +442,40 @@ class TextToSpeechApp(QMainWindow):
     def upload_voice(self):
         file_path, _ = QFileDialog.getOpenFileName(self, "选择音频文件", "", "Audio Files (*.mp3 *.wav)")
         if file_path:
+            # 获取音色名称
             name, ok = QInputDialog.getText(self, "输入音色名称", "音色名称:")
             if ok:
+                # 验证customName的有效性
+                if not re.match(r'^[a-zA-Z0-9_-]{1,64}$', name):
+                    QMessageBox.warning(self, "错误", "音色名称无效。只能包含字母、数字、下划线和连字符，且不能超过64个字符。")
+                    return
+                # 获取用户输入的文本
+                text, ok = QInputDialog.getText(self, "输入要转换的文本", "文本:")
+                if not ok or not text:
+                    QMessageBox.warning(self, "错误", "请输入要转换的文本!")
+                    return
                 try:
-                    response = self.client.upload_voice(file_path, name)
+                    # 获取当前选中的模型
+                    model = self.model_combo.currentData()
+                    
+                    # 读取音频文件
+                    with open(file_path, 'rb') as f:
+                        audio_data = f.read()
+                    
+                    # 构建multipart/form-data格式的音频数据
+                    audio_content = f'data:audio/mpeg;base64,{base64.b64encode(audio_data).decode("utf-8")}'
+                    
+                    response = self.client.upload_voice(
+                        audio=audio_content,
+                        model=model,
+                        customName=name,
+                        text=text  # 使用用户输入的文本
+                    )
                     QMessageBox.information(self, "成功", "音色上传成功!")
                     self.load_voice_list()  # 重新加载音色列表
                 except Exception as e:
                     QMessageBox.warning(self, "错误", f"上传失败: {str(e)}")
+                    print(f"详细错误信息: {e}")
         
     def select_output_directory(self):
         directory = QFileDialog.getExistingDirectory(self, "选择输出目录", self.output_directory)

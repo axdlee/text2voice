@@ -125,24 +125,36 @@ class SiliconFlowClient:
         response.raise_for_status()
         return response.json()
         
-    def upload_voice(self, file_path: str, name: str) -> Dict[str, Any]:
+    def upload_voice(self, audio: str, model: str, customName: str, text: str) -> Dict[str, Any]:
         """
         上传语音文件
+        Args:
+            audio: base64编码的音频数据，格式为 'data:audio/mpeg;base64,...'
+            model: 模型名称
+            customName: 自定义音色名称
+            text: 音频对应的文本
         """
         url = f"{self.base_url}/uploads/audio/voice"
         
-        # 读取音频文件并进行base64编码
-        with open(file_path, 'rb') as f:
-            audio_data = f.read()
-            
-        data = {
-            'model': 'fishaudio/fish-speech-1.5',
-            'customName': name,
-            'text': '在一无所知中, 梦里的一天结束了，一个新的轮回便会开始',
-            'audio': ('audio.mp3', audio_data, 'audio/mpeg')
+        # 准备multipart/form-data格式的数据
+        files = {
+            'audio': (None, audio),
+            'model': (None, model),
+            'customName': (None, customName),
+            'text': (None, text)
         }
         
-        response = requests.post(url, headers=self.headers, files=data)
+        # 打印调试信息
+        print(f"请求URL: {url}")
+        print(f"请求头: {self.headers}")
+        print(f"请求数据: {files}")
+        
+        response = requests.post(url, headers=self.headers, files=files)
+        
+        # 如果是400错误，打印详细的错误信息
+        if response.status_code == 400:
+            print(f"错误响应: {response.text}")
+            
         response.raise_for_status()
         return response.json()
         
