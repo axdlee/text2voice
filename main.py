@@ -436,12 +436,19 @@ class TextToSpeechApp(QMainWindow):
             return
             
         try:
-            self.audio_player.play(self.current_audio_url)
+            self.audio_player.play(self.current_audio_url, self._on_playback_complete)
             self.play_btn.setEnabled(False)
             self.stop_btn.setEnabled(True)
         except Exception as e:
             QMessageBox.warning(self, "错误", f"播放失败: {str(e)}")
             
+    def _on_playback_complete(self):
+        """
+        音频播放完成的回调函数
+        """
+        self.play_btn.setEnabled(True)
+        self.stop_btn.setEnabled(False)
+        
     def stop_audio(self):
         self.audio_player.stop()
         self.play_btn.setEnabled(True)
