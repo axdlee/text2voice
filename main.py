@@ -81,6 +81,7 @@ class TextToSpeechApp(QMainWindow):
         self.config_file = 'data/config.json'
         self.api_key = None
         self.api_url = None
+        self.output_directory = 'temp'  # 默认输出目录
         self.client = None
         self.audio_player = AudioPlayer()
         self.current_audio_url = None
@@ -173,6 +174,7 @@ class TextToSpeechApp(QMainWindow):
         self.stop_btn = QPushButton("停止")
         self.settings_btn = QPushButton("设置")
         self.upload_voice_btn = QPushButton("上传参考音色")
+        self.output_dir_btn = QPushButton("选择输出目录")
         
         self.play_btn.setEnabled(False)
         self.stop_btn.setEnabled(False)
@@ -182,6 +184,7 @@ class TextToSpeechApp(QMainWindow):
         button_layout.addWidget(self.stop_btn)
         button_layout.addWidget(self.settings_btn)
         button_layout.addWidget(self.upload_voice_btn)
+        button_layout.addWidget(self.output_dir_btn)
         
         left_layout.addLayout(button_layout)
         
@@ -206,6 +209,7 @@ class TextToSpeechApp(QMainWindow):
         self.stop_btn.clicked.connect(self.stop_audio)
         self.settings_btn.clicked.connect(self.open_settings)
         self.upload_voice_btn.clicked.connect(self.upload_voice)
+        self.output_dir_btn.clicked.connect(self.select_output_directory)
         
         # 加载语音列表
         self.load_voice_list()
@@ -277,9 +281,9 @@ class TextToSpeechApp(QMainWindow):
         self.progress_bar.setVisible(False)
         
         try:
-            # 保存到临时文件
-            os.makedirs('temp', exist_ok=True)
-            audio_path = os.path.join('temp', 'output.mp3')
+            # 保存到用户选择的输出目录
+            os.makedirs(self.output_directory, exist_ok=True)
+            audio_path = os.path.join(self.output_directory, 'output.mp3')
             
             # 如果是URL，下载音频
             if isinstance(audio_data, str) and audio_data.startswith('http'):
@@ -325,6 +329,7 @@ class TextToSpeechApp(QMainWindow):
                 config = json.load(f)
                 self.api_key = config.get('api_key')
                 self.api_url = config.get('api_url')
+                self.output_directory = config.get('output_directory', 'temp')  # 加载输出目录
                 
                 # 加载模型设置
                 if 'model_settings' in config:
@@ -345,15 +350,12 @@ class TextToSpeechApp(QMainWindow):
                             break
 
     def save_config(self):
-        # 读取现有配置（如果存在）
-        config = {}
-        if os.path.exists(self.config_file):
-            with open(self.config_file, 'r') as f:
-                try:
-                    config = json.load(f)
-                except:
-                    pass
-
+        config = {
+            'api_key': self.api_key,
+            'api_url': self.api_url,
+            'output_directory': self.output_directory,
+            'model_settings': {}
+        }
         # 更新API设置
         config['api_key'] = self.api_key
         config['api_url'] = self.api_url
@@ -395,6 +397,13 @@ class TextToSpeechApp(QMainWindow):
                     self.load_voice_list()  # 重新加载音色列表
                 except Exception as e:
                     QMessageBox.warning(self, "错误", f"上传失败: {str(e)}")
+        
+    def select_output_directory(self):
+        directory = QFileDialog.getExistingDirectory(self, "选择输出目录", self.output_directory)
+        if directory:
+            self.output_directory = directory
+            QMessageBox.information(self, "成功", f"输出目录已设置为: {self.output_directory}")
+            self.save_config()  # 保存配置
         
     def closeEvent(self, event):
         # 清理临时文件
