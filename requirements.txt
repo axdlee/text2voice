@@ -1,0 +1,4 @@
+PyQt6==6.6.1
+requests==2.31.0
+pygame==2.5.2
+python-dotenv==1.0.0 
