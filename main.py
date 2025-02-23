@@ -133,6 +133,13 @@ class UploadVoiceDialog(QDialog):
 
 class TextToSpeechApp(QMainWindow):
     def __init__(self):
+        # 添加模型名称映射
+        self.model_display_to_actual = {
+            "CosyVoice2-0.5B (免费)": "FunAudioLLM/CosyVoice2-0.5B",
+            "GPT-SoVITS (免费)": "RVC-Boss/GPT-SoVITS",
+            "Fish-Speech-1.5 (付费)": "fishaudio/fish-speech-1.5",
+            "Fish-Speech-1.4 (付费)": "fishaudio/fish-speech-1.4"
+        }
         super().__init__()
         self.config_file = 'data/config.json'
         self.api_key = None
@@ -283,7 +290,6 @@ class TextToSpeechApp(QMainWindow):
             self.voice_combo.clear()
             
             # 加载系统音色
-            selected_model = self.model_combo.currentData()
             voices = self.client.get_voice_list()
             print(f"获取到的音色列表: {voices}")  # 调试信息
             
@@ -291,10 +297,14 @@ class TextToSpeechApp(QMainWindow):
             custom_voices = voices.get('result', [])
             print(f"自定义音色列表: {custom_voices}")  # 调试信息
             
+            selected_model = self.model_combo.currentData()
             for voice in custom_voices:
                 print(f"处理音色: {voice}")  # 调试信息
                 voice_model = voice.get('model')
-                print(f"音色模型: {voice_model}, 当前选中模型: {selected_model}")  # 调试信息
+                # 如果voice_model在映射表中，使用映射后的值
+                if voice_model in self.model_display_to_actual:
+                    voice_model = self.model_display_to_actual[voice_model]
+                print(f"处理后的音色模型: {voice_model}, 当前选中模型: {selected_model}")  # 调试信息
                 
                 if voice_model == selected_model:  # 仅添加当前模型的音色
                     voice_name = voice.get('customName', '未命名')
@@ -536,11 +546,14 @@ class TextToSpeechApp(QMainWindow):
                 # 构建multipart/form-data格式的音频数据
                 audio_content = f'data:audio/mpeg;base64,{base64.b64encode(audio_data).decode("utf-8")}'
                 
+                # 使用model的实际值而不是显示名称
+                actual_model = model  # model已经是正确的值，因为我们使用了currentData()
+                
                 response = self.client.upload_voice(
                     audio=audio_content,
-                    model=model,
+                    model=actual_model,
                     customName=name,
-                    text=text  # 使用用户输入的文本
+                    text=text
                 )
                 QMessageBox.information(self, "成功", "音色上传成功!")
                 self.load_voice_list()  # 重新加载音色列表
