@@ -5,7 +5,7 @@ from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
                            QHBoxLayout, QTextEdit, QPushButton, QLabel, 
                            QListWidget, QMessageBox, QComboBox, QProgressBar, 
                            QDialog, QLineEdit, QFormLayout, QDialogButtonBox, 
-                           QFileDialog, QInputDialog, QDoubleSpinBox)
+                           QFileDialog, QInputDialog, QDoubleSpinBox, QListWidgetItem)
 from PyQt6.QtCore import Qt, QThread, pyqtSignal
 import requests
 from dotenv import load_dotenv
@@ -150,6 +150,8 @@ class TextToSpeechApp(QMainWindow):
         self.audio_player = AudioPlayer()
         self.current_audio_url = None
         self.conversion_thread = None
+        self.custom_voice_list = QListWidget()
+        self.delete_buttons = []  # 存储删除按钮的列表
         
         # 先创建UI
         self.initUI()
@@ -241,6 +243,10 @@ class TextToSpeechApp(QMainWindow):
         self.progress_bar.setVisible(False)
         left_layout.addWidget(self.progress_bar)
         
+        # 自定义音色列表
+        left_layout.addWidget(QLabel('自定义音色列表:'))
+        left_layout.addWidget(self.custom_voice_list)
+        
         # 控制按钮区
         button_layout = QHBoxLayout()
         self.convert_btn = QPushButton("转换为语音")
@@ -262,6 +268,11 @@ class TextToSpeechApp(QMainWindow):
         
         left_layout.addLayout(button_layout)
         
+        # 在TextToSpeechApp类中添加自定义音色列表按钮
+        self.show_custom_voice_list_btn = QPushButton('显示自定义音色列表')
+        self.show_custom_voice_list_btn.clicked.connect(self.show_custom_voice_list)
+        left_layout.addWidget(self.show_custom_voice_list_btn)
+        
         # 设置主布局
         layout.addLayout(left_layout, stretch=2)
         
@@ -280,6 +291,12 @@ class TextToSpeechApp(QMainWindow):
         
         # 初始化采样率选项
         self.update_sample_rate_options()
+        
+        # 加载自定义音色列表
+        self.load_custom_voice_list()
+        
+        # 删除音色的功能
+        self.custom_voice_list.itemClicked.connect(self.on_custom_voice_clicked)
         
     def load_voice_list(self):
         if not self.client:
@@ -416,10 +433,17 @@ class TextToSpeechApp(QMainWindow):
         self.progress_bar.setVisible(False)
         
         try:
+            # 从输入文本中获取默认文件名
+            input_text = self.text_input.toPlainText()
+            # 获取前10个字符，移除特殊字符和空格
+            default_name = re.sub(r'[\\/:*?"<>|\s]', '', input_text[:10])
+            if not default_name:  # 如果处理后的文本为空，使用时间戳
+                default_name = f'output_{int(time.time())}'
+            
             # 弹出对话框让用户输入文件名
-            new_file_name, ok = QInputDialog.getText(self, '保存文件', '请输入文件名:', QLineEdit.Normal, 'output')
+            new_file_name, ok = QInputDialog.getText(self, '保存文件', '请输入文件名:', QLineEdit.EchoMode.Normal, default_name)
             if not ok or not new_file_name:
-                # 如果用户没有输入文件名，自动生成一个不重复的文件名
+                # 如果用户没有输入文件名，使用默认文件名
                 selected_format = self.format_combo.currentText()
                 if selected_format == 'mp3':
                     file_extension = 'mp3'
@@ -431,7 +455,7 @@ class TextToSpeechApp(QMainWindow):
                     file_extension = 'pcm'
                 else:
                     file_extension = 'mp3'  # 默认值
-                new_file_name = f'output_{int(time.time())}.{file_extension}'
+                new_file_name = f'{default_name}.{file_extension}'
             else:
                 # 根据选择的格式设置文件扩展名
                 selected_format = self.format_combo.currentText()
@@ -611,6 +635,59 @@ class TextToSpeechApp(QMainWindow):
     def on_model_changed(self):
         if self.client:  # 只在客户端已初始化时加载音色列表
             self.load_voice_list()
+
+    def load_custom_voice_list(self):
+        if not self.client:
+            return
+        try:
+            self.custom_voice_list.clear()  # 清空现有列表
+            voices = self.client.get_voice_list().get('result', [])
+            for voice in voices:
+                voice_name = voice.get('customName', '未命名')
+                voice_id = voice.get('uri')
+                item = QListWidgetItem(voice_name)
+                item.setData(Qt.ItemDataRole.UserRole, voice_id)  # 存储音色ID
+                self.custom_voice_list.addItem(item)
+                # 添加删除按钮
+                delete_button = QPushButton('删除')
+                delete_button.clicked.connect(lambda checked, id=voice_id: self.delete_voice(id))
+                self.delete_buttons.append(delete_button)
+                self.custom_voice_list.setItemWidget(item, delete_button)
+        except Exception as e:
+            QMessageBox.warning(self, '错误', f'加载自定义音色列表失败: {str(e)}')
+
+    def delete_voice(self, voice_id):
+        try:
+            response = self.client.delete_voice(voice_id)
+            QMessageBox.information(self, '成功', '音色删除成功!')
+            self.load_custom_voice_list()  # 重新加载音色列表
+        except Exception as e:
+            QMessageBox.warning(self, '错误', f'删除音色失败: {str(e)}')
+
+    def on_custom_voice_clicked(self, item):
+        # 实现自定义音色列表项点击后的逻辑
+        voice_id = item.data(Qt.ItemDataRole.UserRole)
+        # 在这里可以添加更多逻辑，例如显示音色详情或编辑音色
+        print(f"点击了音色: {voice_id}")
+
+    def show_custom_voice_list(self):
+        dialog = QDialog(self)
+        dialog.setWindowTitle('自定义音色列表')
+        layout = QVBoxLayout()
+        custom_voice_list_widget = QListWidget()
+        voices = self.client.get_voice_list().get('result', [])
+        for voice in voices:
+            voice_name = voice.get('customName', '未命名')
+            voice_id = voice.get('uri')
+            item = QListWidgetItem(voice_name)  # 创建音色名称项
+            custom_voice_list_widget.addItem(item)  # 添加音色名称项
+            # 创建删除按钮并添加到列表项
+            delete_button = QPushButton('删除')
+            delete_button.clicked.connect(lambda checked, id=voice_id: self.delete_voice(id))
+            custom_voice_list_widget.setItemWidget(item, delete_button)  # 将删除按钮添加到列表项
+        layout.addWidget(custom_voice_list_widget)  # 将自定义音色列表添加到布局中
+        dialog.setLayout(layout)
+        dialog.exec()
 
 def main():
     app = QApplication(sys.argv)
