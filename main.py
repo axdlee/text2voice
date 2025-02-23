@@ -308,17 +308,38 @@ class TextToSpeechApp(QMainWindow):
         self.play_btn.setEnabled(True)
         self.stop_btn.setEnabled(False)
         
+    def save_config(self):
+        config = {
+            'api_key': self.api_key,
+            'api_url': self.api_url,
+            'model_settings': {}
+        }
+        
+        # 按模型维度存储设置
+        selected_model = self.model_combo.currentData()
+        config['model_settings'][selected_model] = {
+            'voice_id': self.voice_combo.currentData(),
+            'sample_rate': int(self.sample_rate_input.text()),
+            'speed': float(self.speed_input.text()),
+            'gain': float(self.gain_input.text()),
+            'response_format': self.format_combo.currentText()
+        }
+        
+        os.makedirs('data', exist_ok=True)
+        with open(self.config_file, 'w') as f:
+            json.dump(config, f, ensure_ascii=False, indent=4)
+
     def load_config(self):
         if os.path.exists(self.config_file):
             with open(self.config_file, 'r') as f:
                 config = json.load(f)
+                self.api_key = config.get('api_key')
+                self.api_url = config.get('api_url')
+                
                 # 加载上次的设置
-                if 'last_settings' in config:
-                    last_settings = config['last_settings']
-                    # 设置模型
-                    index = self.model_combo.findData(last_settings.get('model'))
-                    if index >= 0:
-                        self.model_combo.setCurrentIndex(index)
+                selected_model = self.model_combo.currentData()
+                if 'model_settings' in config and selected_model in config['model_settings']:
+                    last_settings = config['model_settings'][selected_model]
                     # 设置语音
                     if last_settings.get('voice_id'):
                         index = self.voice_combo.findData(last_settings.get('voice_id'))
@@ -328,24 +349,9 @@ class TextToSpeechApp(QMainWindow):
                     self.sample_rate_input.setText(str(last_settings.get('sample_rate', 32000)))
                     self.speed_input.setText(str(last_settings.get('speed', 1.0)))
                     self.gain_input.setText(str(last_settings.get('gain', 0.0)))
-                return config.get('api_key'), config.get('api_url')
+                    self.format_combo.setCurrentText(last_settings.get('response_format', 'mp3'))
+                return self.api_key, self.api_url
         return None, None
-
-    def save_config(self):
-        config = {
-            'api_key': self.api_key,
-            'api_url': self.api_url,
-            'last_settings': {
-                'model': self.model_combo.currentData(),
-                'voice_id': self.voice_combo.currentData(),
-                'sample_rate': int(self.sample_rate_input.text()),
-                'speed': float(self.speed_input.text()),
-                'gain': float(self.gain_input.text())
-            }
-        }
-        os.makedirs('data', exist_ok=True)
-        with open(self.config_file, 'w') as f:
-            json.dump(config, f, ensure_ascii=False, indent=4)
 
     def open_settings(self):
         dialog = SettingsDialog(self.api_key, self.api_url)
