@@ -93,7 +93,9 @@ class UploadVoiceDialog(QDialog):
         self.model_combo = QComboBox()
         for model in models:
             self.model_combo.addItem(model[1], model[0])  # 显示名称和数据
-        self.model_combo.setCurrentData(selected_model)  # 设置默认选中模型
+        index = self.model_combo.findData(selected_model)
+        if index >= 0:
+            self.model_combo.setCurrentIndex(index)  # 设置默认选中模型
 
         # 音色名称输入
         self.custom_name_input = QLineEdit()
@@ -286,21 +288,33 @@ class TextToSpeechApp(QMainWindow):
             print(f"获取到的音色列表: {voices}")  # 调试信息
             
             # 先添加自定义音色
-            for voice in voices.get('result', []):
-                if voice.get('model') == selected_model:  # 仅添加当前模型的音色
+            custom_voices = voices.get('result', [])
+            print(f"自定义音色列表: {custom_voices}")  # 调试信息
+            
+            for voice in custom_voices:
+                print(f"处理音色: {voice}")  # 调试信息
+                voice_model = voice.get('model')
+                print(f"音色模型: {voice_model}, 当前选中模型: {selected_model}")  # 调试信息
+                
+                if voice_model == selected_model:  # 仅添加当前模型的音色
                     voice_name = voice.get('customName', '未命名')
                     voice_id = voice.get('uri')
+                    print(f"添加自定义音色 - 名称: {voice_name}, ID: {voice_id}")  # 调试信息
                     if voice_id:  # 确保有效的voice_id
                         self.voice_combo.addItem(f"自定义音色: {voice_name}", voice_id)
             
             # 再添加默认音色选项
             self.voice_combo.addItem("默认语音", None)  # 添加默认选项
-            for model, voices in SiliconFlowClient.DEFAULT_VOICES.items():
-                if model == selected_model:
-                    for voice in voices:
-                        self.voice_combo.addItem(f"系统音色: {voice.split(':')[-1]}", voice)
+            
+            # 添加系统音色
+            if selected_model in SiliconFlowClient.DEFAULT_VOICES:
+                for voice in SiliconFlowClient.DEFAULT_VOICES[selected_model]:
+                    voice_name = voice.split(':')[-1]
+                    self.voice_combo.addItem(f"系统音色: {voice_name}", voice)
+                    print(f"添加系统音色: {voice_name}")  # 调试信息
                         
         except Exception as e:
+            print(f"加载音色列表时出错: {str(e)}")  # 调试信息
             QMessageBox.warning(self, "错误", f"加载语音列表失败: {str(e)}")
             
     def update_voice_options(self):
