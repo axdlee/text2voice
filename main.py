@@ -3,12 +3,15 @@ import json
 import os
 from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, 
                            QHBoxLayout, QTextEdit, QPushButton, QLabel, 
-                           QListWidget, QMessageBox, QComboBox, QProgressBar)
+                           QListWidget, QMessageBox, QComboBox, QProgressBar, 
+                           QDialog, QLineEdit, QFormLayout, QDialogButtonBox, 
+                           QFileDialog, QInputDialog)
 from PyQt6.QtCore import Qt, QThread, pyqtSignal
 import requests
 from dotenv import load_dotenv
 from api_client import SiliconFlowClient
 from audio_player import AudioPlayer
+from typing import Dict, Any
 
 # 加载环境变量
 load_dotenv()
@@ -30,11 +33,33 @@ class ConversionWorker(QThread):
         except Exception as e:
             self.error.emit(str(e))
 
+class SettingsDialog(QDialog):
+    def __init__(self, api_key: str, api_url: str):
+        super().__init__()
+        self.setWindowTitle("设置")
+        self.api_key_input = QLineEdit(api_key)
+        self.api_url_input = QLineEdit(api_url)
+        
+        layout = QFormLayout()
+        layout.addRow("API密钥:", self.api_key_input)
+        layout.addRow("API地址:", self.api_url_input)
+        
+        buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        buttons.accepted.connect(self.accept)
+        buttons.rejected.connect(self.reject)
+        
+        layout.addWidget(buttons)
+        self.setLayout(layout)
+
+    def get_settings(self):
+        return self.api_key_input.text(), self.api_url_input.text()
+
 class TextToSpeechApp(QMainWindow):
     def __init__(self):
         super().__init__()
         self.api_key = os.getenv('SILICON_API_KEY')
-        self.client = SiliconFlowClient(self.api_key) if self.api_key else None
+        self.api_url = os.getenv('SILICON_API_URL')
+        self.client = SiliconFlowClient(self.api_key, self.api_url) if self.api_key else None
         self.audio_player = AudioPlayer()
         self.current_audio_url = None
         self.conversion_thread = None
@@ -76,6 +101,8 @@ class TextToSpeechApp(QMainWindow):
         self.convert_btn = QPushButton("转换为语音")
         self.play_btn = QPushButton("播放")
         self.stop_btn = QPushButton("停止")
+        self.settings_btn = QPushButton("设置")
+        self.upload_voice_btn = QPushButton("上传参考音色")
         
         self.play_btn.setEnabled(False)
         self.stop_btn.setEnabled(False)
@@ -83,6 +110,8 @@ class TextToSpeechApp(QMainWindow):
         button_layout.addWidget(self.convert_btn)
         button_layout.addWidget(self.play_btn)
         button_layout.addWidget(self.stop_btn)
+        button_layout.addWidget(self.settings_btn)
+        button_layout.addWidget(self.upload_voice_btn)
         
         left_layout.addLayout(button_layout)
         
@@ -105,6 +134,8 @@ class TextToSpeechApp(QMainWindow):
         self.convert_btn.clicked.connect(self.convert_text)
         self.play_btn.clicked.connect(self.play_audio)
         self.stop_btn.clicked.connect(self.stop_audio)
+        self.settings_btn.clicked.connect(self.open_settings)
+        self.upload_voice_btn.clicked.connect(self.upload_voice)
         
         # 加载语音列表
         self.load_voice_list()
@@ -183,6 +214,24 @@ class TextToSpeechApp(QMainWindow):
         self.audio_player.stop()
         self.play_btn.setEnabled(True)
         self.stop_btn.setEnabled(False)
+        
+    def open_settings(self):
+        dialog = SettingsDialog(self.api_key, self.api_url)
+        if dialog.exec() == QDialog.Accepted:
+            self.api_key, self.api_url = dialog.get_settings()
+            self.client = SiliconFlowClient(self.api_key, self.api_url)
+        
+    def upload_voice(self):
+        file_path, _ = QFileDialog.getOpenFileName(self, "选择音频文件", "", "Audio Files (*.mp3 *.wav)")
+        if file_path:
+            name, ok = QInputDialog.getText(self, "输入音色名称", "音色名称:")
+            if ok:
+                try:
+                    response = self.client.upload_voice(file_path, name)
+                    QMessageBox.information(self, "成功", "音色上传成功!")
+                    self.load_voice_list()  # 重新加载音色列表
+                except Exception as e:
+                    QMessageBox.warning(self, "错误", f"上传失败: {str(e)}")
         
     def closeEvent(self, event):
         # 清理临时文件
