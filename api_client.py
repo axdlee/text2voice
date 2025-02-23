@@ -120,8 +120,8 @@ class SiliconFlowClient:
         """
         删除指定的语音
         """
-        url = f"{self.base_url}/audio/voice/{voice_id}"
-        response = requests.delete(url, headers=self.headers)
+        payload = {"uri": voice_id}
+        response = requests.post(f"{self.base_url}/audio/voice/deletions", headers=self.headers, json=payload)
         response.raise_for_status()
         return response.json()
         

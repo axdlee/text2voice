@@ -255,8 +255,8 @@ class TextToSpeechApp(QMainWindow):
         left_layout.addWidget(self.progress_bar)
         
         # 自定义音色列表
-        left_layout.addWidget(QLabel('自定义音色列表:'))
-        left_layout.addWidget(self.custom_voice_list)
+        #left_layout.addWidget(QLabel('自定义音色列表:'))
+        #left_layout.addWidget(self.custom_voice_list)
         
         # 控制按钮区
         button_layout = QHBoxLayout()
@@ -677,6 +677,10 @@ class TextToSpeechApp(QMainWindow):
 
     def delete_voice(self, voice_id):
         try:
+            # 打印出要删除的 voice_id 以便调试
+            print(f"尝试删除音色: {voice_id}")
+            
+            # 调用 API 删除音色
             response = self.client.delete_voice(voice_id)
             QMessageBox.information(self, '成功', '音色删除成功!')
             self.load_custom_voice_list()  # 重新加载音色列表
