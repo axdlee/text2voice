@@ -20,15 +20,16 @@ class ConversionWorker(QThread):
     finished = pyqtSignal(str)
     error = pyqtSignal(str)
     
-    def __init__(self, client, text, voice_id=None):
+    def __init__(self, client, text, voice_id=None, model=None):
         super().__init__()
         self.client = client
         self.text = text
         self.voice_id = voice_id
+        self.model = model
         
     def run(self):
         try:
-            result = self.client.create_speech(self.text, self.voice_id)
+            result = self.client.create_speech(self.text, self.voice_id, self.model)
             self.finished.emit(result.get('url', ''))
         except Exception as e:
             self.error.emit(str(e))
@@ -87,6 +88,21 @@ class TextToSpeechApp(QMainWindow):
         self.text_input.setPlaceholderText("请输入要转换的文本...")
         left_layout.addWidget(QLabel("文本输入:"))
         left_layout.addWidget(self.text_input)
+        
+        # 模型选择下拉框
+        self.model_combo = QComboBox()
+        self.model_combo.addItem("CosyVoice2-0.5B (免费)", "FunAudioLLM/CosyVoice2-0.5B")
+        self.model_combo.addItem("GPT-SoVITS (免费)", "RVC-Boss/GPT-SoVITS")
+        self.model_combo.addItem("Fish-Speech-1.5 (付费)", "fishaudio/fish-speech-1.5")
+        self.model_combo.addItem("Fish-Speech-1.4 (付费)", "fishaudio/fish-speech-1.4")
+        
+        # 使用红色标记付费模型
+        for i in range(self.model_combo.count()):
+            if "(付费)" in self.model_combo.itemText(i):
+                self.model_combo.setItemData(i, Qt.GlobalColor.red, Qt.ItemDataRole.ForegroundRole)
+        
+        left_layout.addWidget(QLabel("选择模型:"))
+        left_layout.addWidget(self.model_combo)
         
         # 语音选择下拉框
         self.voice_combo = QComboBox()
@@ -165,12 +181,21 @@ class TextToSpeechApp(QMainWindow):
             return
             
         voice_id = self.voice_combo.currentData()
+        model = self.model_combo.currentData()
+        
+        # 如果选择了付费模型，显示提醒
+        if "(付费)" in self.model_combo.currentText():
+            reply = QMessageBox.question(self, "付费提醒", 
+                "您选择的是付费模型，将会产生费用。是否继续？",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
+            if reply == QMessageBox.StandardButton.No:
+                return
         
         self.convert_btn.setEnabled(False)
         self.progress_bar.setVisible(True)
         self.progress_bar.setRange(0, 0)  # 显示忙碌状态
         
-        self.conversion_thread = ConversionWorker(self.client, text, voice_id)
+        self.conversion_thread = ConversionWorker(self.client, text, voice_id, model)
         self.conversion_thread.finished.connect(self.handle_conversion_finished)
         self.conversion_thread.error.connect(self.handle_conversion_error)
         self.conversion_thread.start()
@@ -220,7 +245,7 @@ class TextToSpeechApp(QMainWindow):
         
     def open_settings(self):
         dialog = SettingsDialog(self.api_key, self.api_url)
-        if dialog.exec() == QDialog.Accepted:
+        if dialog.exec() == QDialog.DialogCode.Accepted:
             self.api_key, self.api_url = dialog.get_settings()
             self.client = SiliconFlowClient(self.api_key, self.api_url)
         

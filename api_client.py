@@ -4,6 +4,14 @@ import os
 from typing import Optional, Dict, Any
 
 class SiliconFlowClient:
+    DEFAULT_MODEL = "FunAudioLLM/CosyVoice2-0.5B"
+    AVAILABLE_MODELS = {
+        "fishaudio/fish-speech-1.5": "Fish-Speech-1.5 (充值余额付费)",
+        "fishaudio/fish-speech-1.4": "Fish-Speech-1.4 (充值余额付费)",
+        "FunAudioLLM/CosyVoice2-0.5B": "CosyVoice2-0.5B (赠送余额付费)",
+        "RVC-Boss/GPT-SoVITS": "GPT-SoVITS (赠送余额付费)"
+    }
+    
     def __init__(self, api_key: str, api_url: Optional[str] = None):
         self.api_key = api_key
         self.base_url = api_url or "https://api.siliconflow.cn/v1"
@@ -12,13 +20,13 @@ class SiliconFlowClient:
             "Content-Type": "application/json"
         }
         
-    def create_speech(self, text: str, voice_id: Optional[str] = None) -> Dict[str, Any]:
+    def create_speech(self, text: str, voice_id: Optional[str] = None, model: Optional[str] = None) -> Dict[str, Any]:
         """
         将文本转换为语音
         """
         url = f"{self.base_url}/audio/speech"
         payload = {
-            "model": "FunAudioLLM/CosyVoice2-0.5B",
+            "model": model or self.DEFAULT_MODEL,
             "input": text,
             "response_format": "mp3"
         }
