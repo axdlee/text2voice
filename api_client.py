@@ -16,8 +16,7 @@ class SiliconFlowClient:
         self.api_key = api_key
         self.base_url = api_url or "https://api.siliconflow.cn/v1"
         self.headers = {
-            "Authorization": f"Bearer {api_key}",
-            "Content-Type": "application/json"
+            "Authorization": f"Bearer {api_key}"
         }
         
     def create_speech(self, text: str, voice_id: Optional[str] = None, model: Optional[str] = None) -> Dict[str, Any]:
@@ -25,15 +24,23 @@ class SiliconFlowClient:
         将文本转换为语音
         """
         url = f"{self.base_url}/audio/speech"
-        payload = {
+        
+        # 设置Content-Type为multipart/form-data
+        headers = self.headers.copy()
+        
+        # 准备表单数据
+        data = {
             "model": model or self.DEFAULT_MODEL,
             "input": text,
-            "response_format": "mp3"
+            "response_format": "mp3",
+            "sample_rate": 44100,
+            "stream": False
         }
+        
         if voice_id:
-            payload["voice"] = voice_id
+            data["voice"] = voice_id
             
-        response = requests.post(url, headers=self.headers, json=payload)
+        response = requests.post(url, headers=headers, data=data)
         response.raise_for_status()
         return response.json()
         
@@ -59,19 +66,20 @@ class SiliconFlowClient:
         """
         上传语音文件
         """
-        url = f"{self.base_url}/audio/voice"
+        url = f"{self.base_url}/uploads/audio/voice"
+        
+        # 读取音频文件并进行base64编码
         with open(file_path, 'rb') as f:
             audio_data = f.read()
             
-        files = {
-            'audio': ('audio.mp3', audio_data, 'audio/mpeg')
-        }
         data = {
             'model': 'fishaudio/fish-speech-1.5',
             'customName': name,
-            'text': '在一无所知中, 梦里的一天结束了，一个新的轮回便会开始'
+            'text': '在一无所知中, 梦里的一天结束了，一个新的轮回便会开始',
+            'audio': ('audio.mp3', audio_data, 'audio/mpeg')
         }
-        response = requests.post(url, headers=self.headers, data=data, files=files)
+        
+        response = requests.post(url, headers=self.headers, files=data)
         response.raise_for_status()
         return response.json()
         

@@ -42,9 +42,14 @@ class SettingsDialog(QDialog):
         self.api_url_input = QLineEdit(api_url)
         
         layout = QFormLayout()
-        layout.addRow("API密钥:", self.api_key_input)
-        layout.addRow("API地址:", self.api_url_input)
-        
+        layout.addRow("硅基流动API地址:", self.api_url_input)
+        layout.addRow("硅基流动API密钥:", self.api_key_input)
+
+        if not api_key:
+            self.api_key_input.setPlaceholderText("请输入硅基流动API密钥")
+        if not api_url:
+            self.api_url_input.setText("https://api.siliconflow.cn/v1")
+
         buttons = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Ok | 
             QDialogButtonBox.StandardButton.Cancel
