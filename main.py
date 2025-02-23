@@ -5,7 +5,7 @@ from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
                            QHBoxLayout, QTextEdit, QPushButton, QLabel, 
                            QListWidget, QMessageBox, QComboBox, QProgressBar, 
                            QDialog, QLineEdit, QFormLayout, QDialogButtonBox, 
-                           QFileDialog, QInputDialog)
+                           QFileDialog, QInputDialog, QDoubleSpinBox)
 from PyQt6.QtCore import Qt, QThread, pyqtSignal
 import requests
 from dotenv import load_dotenv
@@ -93,10 +93,10 @@ class TextToSpeechApp(QMainWindow):
         # 再加载配置
         self.load_config()
         
-        # 初始化客户端
+        # 初始化客户端并加载音色列表
         if self.api_key:
             self.client = SiliconFlowClient(self.api_key, self.api_url)
-            self.load_voice_list()
+            self.load_voice_list()  # 只在客户端初始化后加载一次
 
     def initUI(self):
         self.setWindowTitle('文本转语音工具')
@@ -151,14 +151,24 @@ class TextToSpeechApp(QMainWindow):
         left_layout.addWidget(QLabel("选择音频格式:"))
         left_layout.addWidget(self.format_combo)
         
-        # 其他参数输入
-        self.sample_rate_input = QLineEdit("32000")
-        self.speed_input = QLineEdit("1")
-        self.gain_input = QLineEdit("0")
+        # 采样率选择下拉框
+        self.sample_rate_combo = QComboBox()
         left_layout.addWidget(QLabel("采样率:"))
-        left_layout.addWidget(self.sample_rate_input)
+        left_layout.addWidget(self.sample_rate_combo)
+        
+        # 音速选择器
+        self.speed_input = QDoubleSpinBox()
+        self.speed_input.setRange(0.25, 4.0)
+        self.speed_input.setSingleStep(0.1)
+        self.speed_input.setValue(1.0)
         left_layout.addWidget(QLabel("倍速:"))
         left_layout.addWidget(self.speed_input)
+        
+        # 增益选择器
+        self.gain_input = QDoubleSpinBox()
+        self.gain_input.setRange(-10, 10)
+        self.gain_input.setSingleStep(0.1)
+        self.gain_input.setValue(0.0)
         left_layout.addWidget(QLabel("音量增益:"))
         left_layout.addWidget(self.gain_input)
         
@@ -210,10 +220,11 @@ class TextToSpeechApp(QMainWindow):
         self.settings_btn.clicked.connect(self.open_settings)
         self.upload_voice_btn.clicked.connect(self.upload_voice)
         self.output_dir_btn.clicked.connect(self.select_output_directory)
-        self.model_combo.currentIndexChanged.connect(self.load_voice_list)
+        self.model_combo.currentIndexChanged.connect(self.on_model_changed)
+        self.format_combo.currentIndexChanged.connect(self.update_sample_rate_options)
         
-        # 加载语音列表
-        self.load_voice_list()
+        # 初始化采样率选项
+        self.update_sample_rate_options()
         
     def load_voice_list(self):
         if not self.client:
@@ -262,6 +273,23 @@ class TextToSpeechApp(QMainWindow):
         except Exception as e:
             QMessageBox.warning(self, "错误", f"加载语音列表失败: {str(e)}")
 
+    def update_sample_rate_options(self):
+        # 清空当前选项
+        self.sample_rate_combo.clear()
+        
+        selected_format = self.format_combo.currentText()
+        if selected_format == "mp3":
+            # mp3格式支持32000和44100 Hz
+            self.sample_rate_combo.addItems(["32000", "44100"])
+            self.sample_rate_combo.setCurrentText("44100")
+        elif selected_format == "opus":
+            # opus格式仅支持48000 Hz
+            self.sample_rate_combo.addItem("48000")
+        elif selected_format in ["wav", "pcm"]:
+            # wav和pcm格式支持更多采样率
+            self.sample_rate_combo.addItems(["8000", "16000", "24000", "32000", "44100"])
+            self.sample_rate_combo.setCurrentText("44100")
+
     def convert_text(self):
         if not self.client:
             QMessageBox.warning(self, "错误", "请设置API密钥!")
@@ -283,10 +311,11 @@ class TextToSpeechApp(QMainWindow):
             if reply == QMessageBox.StandardButton.No:
                 return
         
-        sample_rate = int(self.sample_rate_input.text())
-        speed = float(self.speed_input.text())
-        gain = float(self.gain_input.text())
-        response_format = self.format_combo.currentText()  # 获取所选音频格式
+        # 获取参数值
+        sample_rate = int(self.sample_rate_combo.currentText())
+        speed = self.speed_input.value()
+        gain = self.gain_input.value()
+        response_format = self.format_combo.currentText()
         
         self.convert_btn.setEnabled(False)
         self.progress_bar.setVisible(True)
@@ -365,9 +394,9 @@ class TextToSpeechApp(QMainWindow):
                                 if index >= 0:
                                     self.voice_combo.setCurrentIndex(index)
                             # 设置其他参数
-                            self.sample_rate_input.setText(str(settings.get('sample_rate', 32000)))
-                            self.speed_input.setText(str(settings.get('speed', 1.0)))
-                            self.gain_input.setText(str(settings.get('gain', 0.0)))
+                            self.sample_rate_combo.setCurrentText(str(settings.get('sample_rate', 32000)))
+                            self.speed_input.setValue(settings.get('speed', 1.0))
+                            self.gain_input.setValue(settings.get('gain', 0.0))
                             self.format_combo.setCurrentText(settings.get('response_format', 'mp3'))
                             break
 
@@ -390,9 +419,9 @@ class TextToSpeechApp(QMainWindow):
         selected_model = self.model_combo.currentData()
         config['model_settings'][selected_model] = {
             'voice_id': self.voice_combo.currentData(),
-            'sample_rate': int(self.sample_rate_input.text()),
-            'speed': float(self.speed_input.text()),
-            'gain': float(self.gain_input.text()),
+            'sample_rate': int(self.sample_rate_combo.currentText()),
+            'speed': self.speed_input.value(),
+            'gain': self.gain_input.value(),
             'response_format': self.format_combo.currentText()
         }
         
@@ -437,6 +466,10 @@ class TextToSpeechApp(QMainWindow):
         except:
             pass
         event.accept()
+
+    def on_model_changed(self):
+        if self.client:  # 只在客户端已初始化时加载音色列表
+            self.load_voice_list()
 
 def main():
     app = QApplication(sys.argv)
