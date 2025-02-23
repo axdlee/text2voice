@@ -252,17 +252,8 @@ class TextToSpeechApp(QMainWindow):
         
         left_layout.addLayout(button_layout)
         
-        # 右侧布局
-        right_layout = QVBoxLayout()
-        
-        # 语音列表
-        right_layout.addWidget(QLabel("语音列表:"))
-        self.voice_list = QListWidget()
-        right_layout.addWidget(self.voice_list)
-        
-        # 添加左右布局到主布局
+        # 设置主布局
         layout.addLayout(left_layout, stretch=2)
-        layout.addLayout(right_layout, stretch=1)
         
         # 设置主布局
         main_widget.setLayout(layout)
@@ -295,10 +286,10 @@ class TextToSpeechApp(QMainWindow):
             print(f"获取到的音色列表: {voices}")  # 调试信息
             
             # 先添加自定义音色
-            for voice in voices.get('voices', []):
+            for voice in voices.get('result', []):
                 if voice.get('model') == selected_model:  # 仅添加当前模型的音色
-                    voice_name = voice.get('name', '')
-                    voice_id = voice.get('id')
+                    voice_name = voice.get('customName', '未命名')
+                    voice_id = voice.get('uri')
                     if voice_id:  # 确保有效的voice_id
                         self.voice_combo.addItem(f"自定义音色: {voice_name}", voice_id)
             
@@ -309,11 +300,6 @@ class TextToSpeechApp(QMainWindow):
                     for voice in voices:
                         self.voice_combo.addItem(f"系统音色: {voice.split(':')[-1]}", voice)
                         
-            # 更新语音列表显示
-            self.voice_list.clear()
-            for i in range(self.voice_combo.count()):
-                self.voice_list.addItem(self.voice_combo.itemText(i))
-                
         except Exception as e:
             QMessageBox.warning(self, "错误", f"加载语音列表失败: {str(e)}")
             
@@ -329,10 +315,10 @@ class TextToSpeechApp(QMainWindow):
             voices = self.client.get_voice_list()
             
             # 先添加自定义音色
-            for voice in voices.get('voices', []):
+            for voice in voices.get('result', []):
                 if voice.get('model') == selected_model:  # 仅添加当前模型的音色
-                    voice_name = voice.get('name', '')
-                    voice_id = voice.get('id')
+                    voice_name = voice.get('customName', '未命名')
+                    voice_id = voice.get('uri')
                     if voice_id:  # 确保有效的voice_id
                         self.voice_combo.addItem(f"自定义音色: {voice_name}", voice_id)
             
@@ -343,11 +329,6 @@ class TextToSpeechApp(QMainWindow):
                     for voice in voices:
                         self.voice_combo.addItem(f"系统音色: {voice.split(':')[-1]}", voice)
                         
-            # 更新语音列表显示
-            self.voice_list.clear()
-            for i in range(self.voice_combo.count()):
-                self.voice_list.addItem(self.voice_combo.itemText(i))
-                
         except Exception as e:
             QMessageBox.warning(self, "错误", f"加载语音列表失败: {str(e)}")
 
