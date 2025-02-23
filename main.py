@@ -547,7 +547,7 @@ class TextToSpeechApp(QMainWindow):
                 audio_content = f'data:audio/mpeg;base64,{base64.b64encode(audio_data).decode("utf-8")}'
                 
                 # 使用model的实际值而不是显示名称
-                actual_model = model  # model已经是正确的值，因为我们使用了currentData()
+                actual_model = self.model_display_to_actual.get(model, model)  # 获取映射后的模型值
                 
                 response = self.client.upload_voice(
                     audio=audio_content,
