@@ -26,13 +26,25 @@ jobs:
         
     # 创建必要的文件和目录
     - name: Create necessary files
+      shell: bash  # 使用 bash 确保跨平台一致性
       run: |
-        # 创建空的 .env 文件
-        touch .env
-        echo "SILICON_API_KEY=dummy_key" > .env
-        # 创建 assets 目录
-        mkdir -p assets
-        mkdir -p temp
+        # 创建 .env 文件（如果不存在）
+        if [ ! -f ".env" ]; then
+          echo "Creating .env file..."
+          echo "SILICON_API_KEY=dummy_key" > .env
+        fi
+        
+        # 创建目录（如果不存在）
+        for dir in "assets" "temp"; do
+          if [ ! -d "$dir" ]; then
+            echo "Creating $dir directory..."
+            mkdir -p "$dir"
+          fi
+        done
+        
+        # 显示文件结构
+        echo "Current file structure:"
+        ls -la
         
     - name: Install dependencies
       run: |
