@@ -1,8 +1,8 @@
 # 文本转语音工具 (Text-to-Speech Tool)
 
-[![Build Application](https://github.com/xdlee110/text2voice/actions/workflows/build.yml/badge.svg)](https://github.com/xdlee110/text2voice/actions/workflows/build.yml)
-![License](https://img.shields.io/github/license/xdlee110/text2voice)
-![Release](https://img.shields.io/github/v/release/xdlee110/text2voice)
+[![Build Application](https://github.com/axdlee/text2voice/actions/workflows/build.yml/badge.svg)](https://github.com/axdlee/text2voice/actions/workflows/build.yml)
+![License](https://img.shields.io/github/license/axdlee/text2voice)
+![Release](https://img.shields.io/github/v/release/axdlee/text2voice)
 ![Python Version](https://img.shields.io/badge/python-3.8+-blue)
 
 这是一个基于硅基流动 API 的文本转语音转换工具，提供了简洁直观的图形用户界面，支持实时文本转语音和音频播放控制。
