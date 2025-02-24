@@ -710,7 +710,7 @@ class TextToSpeechApp(QMainWindow):
                     
                     # 创建删除按钮
                     delete_button = QPushButton('删除')
-                    delete_button.clicked.connect(lambda checked, vid=voice_id: self.delete_voice(vid))
+                    delete_button.clicked.connect(lambda checked, vid=voice_id: self.delete_voice_and_refresh(vid, self.custom_voice_list))
                     layout.addWidget(delete_button)
                     
                     # 设置容器为列表项的widget
@@ -727,16 +727,50 @@ class TextToSpeechApp(QMainWindow):
             self.logger.error("加载自定义音色列表失败", exc_info=True)
             QMessageBox.warning(self, '错误', f'加载自定义音色列表失败: {str(e)}')
 
-    def delete_voice(self, voice_id):
+    def delete_voice_and_refresh(self, voice_id: str, list_widget: QListWidget):
+        """删除音色并刷新列表"""
         try:
-            # 打印出要删除的 voice_id 以便调试
-            print(f"尝试删除音色: {voice_id}")
-            
-            # 调用 API 删除音色
+            self.logger.info(f"删除音色: {voice_id}")
             response = self.tts_service.delete_voice(voice_id)
+            
+            # 刷新列表
+            list_widget.clear()
+            response = self.tts_service.get_voices()
+            voices = response.get('result', [])
+            
+            for voice in voices:
+                try:
+                    voice_name = voice.get('customName', '未命名')
+                    voice_id = voice.get('uri')
+                    voice_model = voice.get('model', '')
+                    
+                    if not all([voice_name, voice_id, voice_model]):
+                        continue
+                        
+                    container = QWidget()
+                    layout = QHBoxLayout(container)
+                    
+                    name_label = QLabel(f"{voice_name} ({voice_model})")
+                    layout.addWidget(name_label)
+                    
+                    delete_button = QPushButton('删除')
+                    delete_button.clicked.connect(lambda checked, vid=voice_id: self.delete_voice_and_refresh(vid, list_widget))
+                    layout.addWidget(delete_button)
+                    
+                    item = QListWidgetItem()
+                    list_widget.addItem(item)
+                    item.setSizeHint(container.sizeHint())
+                    list_widget.setItemWidget(item, container)
+                    
+                except Exception as e:
+                    self.logger.error(f"刷新列表项失败: {voice}", exc_info=True)
+                    continue
+                
             QMessageBox.information(self, '成功', '音色删除成功!')
-            self.load_custom_voice_list()  # 重新加载音色列表
+            self.load_voice_list()  # 刷新主界面的音色列表
+            
         except Exception as e:
+            self.logger.error(f"删除音色失败: {voice_id}", exc_info=True)
             QMessageBox.warning(self, '错误', f'删除音色失败: {str(e)}')
 
     def on_custom_voice_clicked(self, item):
@@ -752,11 +786,51 @@ class TextToSpeechApp(QMainWindow):
             dialog.setWindowTitle('自定义音色列表')
             layout = QVBoxLayout()
             
-            # 重新加载音色列表
-            self.load_custom_voice_list()
+            # 创建新的 QListWidget
+            custom_voice_list = QListWidget()
+            
+            # 加载音色列表
+            response = self.tts_service.get_voices()
+            voices = response.get('result', [])
+            self.logger.info(f"加载自定义音色列表, 获取到 {len(voices)} 个音色")
+            
+            for voice in voices:
+                try:
+                    voice_name = voice.get('customName', '未命名')
+                    voice_id = voice.get('uri')
+                    voice_model = voice.get('model', '')
+                    
+                    if not all([voice_name, voice_id, voice_model]):
+                        self.logger.warning(f"跳过无效音色数据: {voice}")
+                        continue
+                        
+                    # 创建容器
+                    container = QWidget()
+                    layout_item = QHBoxLayout(container)
+                    
+                    # 添加音色信息标签
+                    name_label = QLabel(f"{voice_name} ({voice_model})")
+                    layout_item.addWidget(name_label)
+                    
+                    # 创建删除按钮
+                    delete_button = QPushButton('删除')
+                    delete_button.clicked.connect(lambda checked, vid=voice_id: self.delete_voice_and_refresh(vid, custom_voice_list))
+                    layout_item.addWidget(delete_button)
+                    
+                    # 创建列表项
+                    item = QListWidgetItem()
+                    custom_voice_list.addItem(item)
+                    item.setSizeHint(container.sizeHint())
+                    custom_voice_list.setItemWidget(item, container)
+                    
+                    self.logger.debug(f"添加自定义音色: {voice_name} ({voice_id})")
+                    
+                except Exception as e:
+                    self.logger.error(f"处理音色数据失败: {voice}", exc_info=True)
+                    continue
             
             # 添加列表到对话框
-            layout.addWidget(self.custom_voice_list)
+            layout.addWidget(custom_voice_list)
             
             # 添加关闭按钮
             close_button = QPushButton('关闭')
@@ -765,6 +839,7 @@ class TextToSpeechApp(QMainWindow):
             
             dialog.setLayout(layout)
             dialog.exec()
+            
         except Exception as e:
             self.logger.error("显示自定义音色列表失败", exc_info=True)
             QMessageBox.warning(self, '错误', f'显示自定义音色列表失败: {str(e)}')
