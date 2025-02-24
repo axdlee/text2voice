@@ -7,3 +7,7 @@ data/
 *.pyw
 *.pyz
 data/config.json
+
+# Logs
+data/logs/
+*.log

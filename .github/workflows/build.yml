@@ -42,7 +42,7 @@ jobs:
         fi
         
         # 创建目录（如果不存在）
-        for dir in "assets" "temp"; do
+        for dir in "assets" "temp" "logs"; do
           if [ ! -d "$dir" ]; then
             echo "Creating $dir directory..."
             mkdir -p "$dir"
@@ -153,17 +153,17 @@ jobs:
     - name: Build (macOS)
       if: runner.os == 'macOS'
       run: |
-        # 确保文件存在
         echo "Checking files..."
         ls -la .env
         ls -la assets
         
-        # 只构建当前平台架构
-        pyinstaller --noconsole \
+        # Intel Mac 构建
+        echo "Building Intel Mac version..."
+        arch -x86_64 pyinstaller --noconsole \
           --add-data ".env:." \
           --add-data "assets/*:assets" \
           --icon "assets/icon.icns" \
-          --name "Text2Voice" \
+          --name "Text2Voice-Intel" \
           --hidden-import PyQt6.QtCore \
           --hidden-import PyQt6.QtGui \
           --hidden-import PyQt6.QtWidgets \
@@ -177,6 +177,36 @@ jobs:
           --exclude-module PyQt6.QtNetwork \
           --exclude-module PyQt6.QtPrintSupport \
           main.py
+          
+        # Apple Silicon 构建
+        echo "Building Apple Silicon version..."
+        arch -arm64 pyinstaller --noconsole \
+          --add-data ".env:." \
+          --add-data "assets/*:assets" \
+          --icon "assets/icon.icns" \
+          --name "Text2Voice-ARM" \
+          --hidden-import PyQt6.QtCore \
+          --hidden-import PyQt6.QtGui \
+          --hidden-import PyQt6.QtWidgets \
+          --exclude-module matplotlib \
+          --exclude-module numpy \
+          --exclude-module PIL \
+          --exclude-module pandas \
+          --exclude-module scipy \
+          --exclude-module tkinter \
+          --exclude-module PyQt6.QtSvg \
+          --exclude-module PyQt6.QtNetwork \
+          --exclude-module PyQt6.QtPrintSupport \
+          main.py
+          
+        # 分别打包两个版本
+        cd dist
+        zip -r ../Text2Voice-macos-intel-latest.zip Text2Voice-Intel.app
+        zip -r ../Text2Voice-macos-arm-latest.zip Text2Voice-ARM.app
+        cd ..
+        
+        echo "Created packages:"
+        ls -lh Text2Voice-macos-*-latest.zip
 
     - name: Build (Linux)
       if: runner.os == 'Linux'
@@ -290,7 +320,8 @@ jobs:
           
           ### 下载
           - [Windows 版本 (Text2Voice-windows-latest.zip)](https://github.com/axdlee/text2voice/releases/download/${{ github.ref_name }}/Text2Voice-windows-latest.zip)
-          - [macOS 版本 (Text2Voice-macos-latest.zip)](https://github.com/axdlee/text2voice/releases/download/${{ github.ref_name }}/Text2Voice-macos-latest.zip)
+          - [macOS Intel 版本 (Text2Voice-macos-intel-latest.zip)](https://github.com/axdlee/text2voice/releases/download/${{ github.ref_name }}/Text2Voice-macos-intel-latest.zip)
+          - [macOS Apple Silicon 版本 (Text2Voice-macos-arm-latest.zip)](https://github.com/axdlee/text2voice/releases/download/${{ github.ref_name }}/Text2Voice-macos-arm-latest.zip)
           - [Linux 版本 (Text2Voice-ubuntu-latest.zip)](https://github.com/axdlee/text2voice/releases/download/${{ github.ref_name }}/Text2Voice-ubuntu-latest.zip)
           
           ### 更新内容
@@ -305,6 +336,10 @@ jobs:
           ![下载次数](https://img.shields.io/github/downloads/axdlee/text2voice/${{ github.ref_name }}/total)
         draft: false
         prerelease: false
-        files: Text2Voice-*-latest.zip  # 更新文件匹配模式
+        files: |
+          Text2Voice-windows-latest.zip
+          Text2Voice-macos-intel-latest.zip
+          Text2Voice-macos-arm-latest.zip
+          Text2Voice-ubuntu-latest.zip
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} 

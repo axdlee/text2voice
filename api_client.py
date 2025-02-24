@@ -2,6 +2,7 @@ import requests
 import json
 import os
 from typing import Optional, Dict, Any
+from utils.logger import logger
 
 class SiliconFlowClient:
     DEFAULT_MODEL = "FunAudioLLM/CosyVoice2-0.5B"
@@ -61,102 +62,157 @@ class SiliconFlowClient:
         self.headers = {
             "Authorization": f"Bearer {api_key}"
         }
+        self.logger = logger.getChild('api')
+        self.logger.info("初始化 API 客户端...")
+        self.logger.debug(f"API Base URL: {self.base_url}")
+        # 隐藏 API Key 的大部分内容
+        masked_key = f"{api_key[:8]}...{api_key[-4:]}" if len(api_key) > 12 else "***"
+        self.logger.debug(f"API Key: {masked_key}")
         
-    def create_speech(self, text: str, voice_id: Optional[str] = None, model: Optional[str] = None, response_format: str = "mp3", sample_rate: int = 32000, speed: float = 1, gain: float = 0) -> Dict[str, Any]:
-        """
-        将文本转换为语音
-        """
-        url = f"{self.base_url}/audio/speech"
-        
-        # 设置请求头
-        headers = self.headers.copy()
-        headers["Content-Type"] = "application/json"
-        
-        # 确定使用的模型
-        selected_model = model or self.DEFAULT_MODEL
-        
-        # 准备请求数据
-        data = {
-            "model": selected_model,
-            "input": text,
-            "voice": voice_id or self.DEFAULT_VOICES[selected_model][0],  # 使用默认语音
-            "response_format": response_format,  # 确保这是字符串类型
-            "sample_rate": int(sample_rate),  # 确保这是整数类型
-            "stream": True,
-            "speed": float(speed),  # 确保这是浮点数类型
-            "gain": float(gain)  # 确保这是浮点数类型
-        }
+    def create_speech(self, text: str, voice_id: Optional[str] = None, model: Optional[str] = None, 
+                     response_format: str = "mp3", sample_rate: int = 32000, 
+                     speed: float = 1, gain: float = 0) -> Dict[str, Any]:
+        """将文本转换为语音"""
+        try:
+            url = f"{self.base_url}/audio/speech"
+            self.logger.info(f"开始文本转语音请求: {text[:50]}...")
+            self.logger.debug(f"完整请求文本: {text}")
             
-        # 打印调试信息
-        print(f"请求URL: {url}")
-        print(f"请求头: {headers}")
-        print(f"请求数据: {data}")
-        
-        # 发送请求
-        response = requests.post(url, headers=headers, json=data)
-        
-        # 如果是400错误，打印详细的错误信息
-        if response.status_code == 400:
-            print(f"错误响应: {response.text}")
+            headers = self.headers.copy()
+            headers["Content-Type"] = "application/json"
             
-        response.raise_for_status()
-        
-        # 如果响应是二进制数据，直接返回
-        if response.headers.get('content-type', '').startswith('audio/'):
-            return response.content
+            selected_model = model or self.DEFAULT_MODEL
+            self.logger.info(f"使用模型: {selected_model}")
             
-        return response.json()
+            data = {
+                "model": selected_model,
+                "input": text,
+                "voice": voice_id or self.DEFAULT_VOICES[selected_model][0],
+                "response_format": response_format,
+                "sample_rate": int(sample_rate),
+                "stream": True,
+                "speed": float(speed),
+                "gain": float(gain)
+            }
+            
+            self.logger.debug(f"请求参数: {data}")
+            self.logger.debug(f"请求头: {headers}")
+            
+            response = requests.post(url, headers=headers, json=data)
+            
+            if response.status_code != 200:
+                self.logger.error(f"API请求失败 (状态码: {response.status_code})")
+                self.logger.error(f"错误响应: {response.text}")
+                self.logger.error(f"请求URL: {url}")
+                self.logger.error(f"请求数据: {data}")
+                response.raise_for_status()
+            
+            content_type = response.headers.get('content-type', '')
+            self.logger.debug(f"响应Content-Type: {content_type}")
+            
+            if content_type.startswith('audio/'):
+                self.logger.info(f"成功获取音频数据 ({len(response.content)} 字节)")
+                return response.content
+            
+            json_response = response.json()
+            self.logger.debug(f"API响应: {json_response}")
+            return json_response
+            
+        except requests.exceptions.RequestException as e:
+            self.logger.error("API请求异常", exc_info=True)
+            self.logger.error(f"请求URL: {url}")
+            self.logger.error(f"请求参数: {data}")
+            if hasattr(e.response, 'text'):
+                self.logger.error(f"错误响应: {e.response.text}")
+            raise
+        except Exception as e:
+            self.logger.error("未预期的错误", exc_info=True)
+            raise
         
     def get_voice_list(self) -> Dict[str, Any]:
-        """
-        获取可用的语音列表
-        """
-        url = f"{self.base_url}/audio/voice/list"
-        response = requests.get(url, headers=self.headers)
-        response.raise_for_status()
-        return response.json()
+        """获取可用的语音列表"""
+        try:
+            url = f"{self.base_url}/audio/voice/list"
+            self.logger.info("获取音色列表...")
+            
+            response = requests.get(url, headers=self.headers)
+            
+            if response.status_code != 200:
+                self.logger.error(f"获取音色列表失败 (状态码: {response.status_code})")
+                self.logger.error(f"错误响应: {response.text}")
+                response.raise_for_status()
+            
+            result = response.json()
+            voice_count = len(result.get('result', []))
+            self.logger.info(f"成功获取音色列表: {voice_count} 个音色")
+            self.logger.debug(f"音色列表详情: {result}")
+            return result
+            
+        except Exception as e:
+            self.logger.error("获取音色列表失败", exc_info=True)
+            self.logger.error(f"请求URL: {url}")
+            raise
         
     def delete_voice(self, voice_id: str) -> Dict[str, Any]:
-        """
-        删除指定的语音
-        """
-        payload = {"uri": voice_id}
-        response = requests.post(f"{self.base_url}/audio/voice/deletions", headers=self.headers, json=payload)
-        response.raise_for_status()
-        return response.json()
+        """删除指定的语音"""
+        try:
+            url = f"{self.base_url}/audio/voice/deletions"
+            self.logger.info(f"删除音色: {voice_id}")
+            
+            response = requests.post(url, 
+                                   headers=self.headers, 
+                                   json={"uri": voice_id})
+            
+            if response.status_code != 200:
+                self.logger.error(f"删除音色失败 (状态码: {response.status_code})")
+                self.logger.error(f"错误响应: {response.text}")
+                self.logger.error(f"音色ID: {voice_id}")
+                response.raise_for_status()
+            
+            result = response.json()
+            self.logger.info(f"音色删除成功: {voice_id}")
+            self.logger.debug(f"删除响应: {result}")
+            return result
+            
+        except Exception as e:
+            self.logger.error(f"删除音色失败: {voice_id}", exc_info=True)
+            self.logger.error(f"请求URL: {url}")
+            raise
         
     def upload_voice(self, audio: str, model: str, customName: str, text: str) -> Dict[str, Any]:
-        """
-        上传语音文件
-        Args:
-            audio: base64编码的音频数据，格式为 'data:audio/mpeg;base64,...'
-            model: 模型名称
-            customName: 自定义音色名称
-            text: 音频对应的文本
-        """
-        url = f"{self.base_url}/uploads/audio/voice"
-        
-        # 准备multipart/form-data格式的数据
-        files = {
-            'audio': (None, audio),
-            'model': (None, model),
-            'customName': (None, customName),
-            'text': (None, text)
-        }
-        
-        # 打印调试信息
-        print(f"请求URL: {url}")
-        print(f"请求头: {self.headers}")
-        print(f"请求数据: {files}")
-        
-        response = requests.post(url, headers=self.headers, files=files)
-        
-        # 如果是400错误，打印详细的错误信息
-        if response.status_code == 400:
-            print(f"错误响应: {response.text}")
+        """上传语音文件"""
+        try:
+            url = f"{self.base_url}/uploads/audio/voice"
+            self.logger.info(f"开始上传音色: {customName}")
+            self.logger.debug(f"模型: {model}")
+            self.logger.debug(f"音频长度: {len(audio)} 字符")
+            self.logger.debug(f"文本: {text}")
             
-        response.raise_for_status()
-        return response.json()
+            files = {
+                'audio': (None, audio),
+                'model': (None, model),
+                'customName': (None, customName),
+                'text': (None, text)
+            }
+            
+            response = requests.post(url, headers=self.headers, files=files)
+            
+            if response.status_code != 200:
+                self.logger.error(f"上传音色失败 (状态码: {response.status_code})")
+                self.logger.error(f"错误响应: {response.text}")
+                self.logger.error(f"请求参数: {files}")
+                response.raise_for_status()
+            
+            result = response.json()
+            self.logger.info(f"音色上传成功: {customName}")
+            self.logger.debug(f"上传响应: {result}")
+            return result
+            
+        except Exception as e:
+            self.logger.error(f"上传音色失败: {customName}", exc_info=True)
+            self.logger.error(f"请求URL: {url}")
+            self.logger.error(f"请求参数: {files}")
+            raise
         
     def create_transcription(self, file_path: str) -> Dict[str, Any]:
         """

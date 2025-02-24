@@ -2,9 +2,12 @@ import pygame
 import os
 from typing import Optional, Callable
 from PyQt6.QtCore import QTimer
+from utils import logger
 
 class AudioPlayer:
     def __init__(self):
+        self.logger = logger.getChild('player')
+        self.logger.info("初始化音频播放器...")
         pygame.mixer.init()
         self.current_audio: Optional[str] = None
         self.on_playback_complete: Optional[Callable] = None
@@ -14,6 +17,7 @@ class AudioPlayer:
         """
         播放音频文件
         """
+        self.logger.info(f"准备播放音频: {audio_file}")
         if not os.path.exists(audio_file):
             raise FileNotFoundError(f"音频文件不存在: {audio_file}")
             
@@ -23,19 +27,25 @@ class AudioPlayer:
         self.current_audio = audio_file
         self.on_playback_complete = on_complete
         
-        pygame.mixer.music.load(audio_file)
-        pygame.mixer.music.play()
-        
-        # 创建定时器检查播放状态
-        if self.check_timer is None:
-            self.check_timer = QTimer()
-            self.check_timer.timeout.connect(self._check_playback_status)
-        self.check_timer.start(100)  # 每100毫秒检查一次
+        try:
+            pygame.mixer.music.load(audio_file)
+            pygame.mixer.music.play()
+            self.logger.debug("音频开始播放")
+            
+            # 创建定时器检查播放状态
+            if self.check_timer is None:
+                self.check_timer = QTimer()
+                self.check_timer.timeout.connect(self._check_playback_status)
+            self.check_timer.start(100)  # 每100毫秒检查一次
+        except Exception as e:
+            self.logger.error(f"音频加载失败: {str(e)}", exc_info=True)
+            raise
         
     def stop(self):
         """
         停止播放
         """
+        self.logger.info("停止音频播放")
         if self.is_playing():
             pygame.mixer.music.stop()
         self.current_audio = None

@@ -15,6 +15,7 @@ from typing import Dict, Any
 import base64
 import re
 import time
+from utils.logger import logger
 
 # 加载环境变量
 load_dotenv()
@@ -25,6 +26,8 @@ class ConversionWorker(QThread):
     
     def __init__(self, client, text, voice_id=None, model=None, sample_rate=32000, speed=1.0, gain=0.0, response_format="mp3"):
         super().__init__()
+        self.logger = logger.getChild('worker')
+        self.logger.info("初始化转换线程...")
         self.client = client
         self.text = text
         self.voice_id = voice_id
@@ -36,6 +39,8 @@ class ConversionWorker(QThread):
         
     def run(self):
         try:
+            self.logger.info("开始文本转语音任务...")
+            self.logger.debug(f"转换参数: model={self.model}, voice={self.voice_id}, format={self.response_format}")
             result = self.client.create_speech(
                 text=self.text,
                 voice_id=self.voice_id,
@@ -45,8 +50,10 @@ class ConversionWorker(QThread):
                 speed=self.speed,
                 gain=self.gain
             )
+            self.logger.info("转换任务完成")
             self.finished.emit(result)
         except Exception as e:
+            self.logger.error("转换任务失败", exc_info=True)
             self.error.emit(str(e))
 
 class SettingsDialog(QDialog):
@@ -153,6 +160,8 @@ class TextToSpeechApp(QMainWindow):
             "Fish-Speech-1.4 (付费)": "fishaudio/fish-speech-1.4"
         }
         super().__init__()
+        self.logger = logger.getChild('ui')
+        self.logger.info("初始化用户界面...")
         self.config_file = 'data/config.json'
         self.api_key = None
         self.api_url = None
@@ -311,49 +320,54 @@ class TextToSpeechApp(QMainWindow):
         
     def load_voice_list(self):
         if not self.client:
+            self.logger.error("API客户端未初始化")
             QMessageBox.warning(self, "错误", "API客户端未初始化!")
             return
         
         try:
+            self.logger.info("开始加载音色列表...")
             # 清空现有音色
             self.voice_combo.clear()
             
             # 加载系统音色
             voices = self.client.get_voice_list()
-            print(f"获取到的音色列表: {voices}")  # 调试信息
+            self.logger.debug(f"获取到的音色列表: {voices}")
             
             # 先添加自定义音色
             custom_voices = voices.get('result', [])
-            print(f"自定义音色列表: {custom_voices}")  # 调试信息
+            self.logger.debug(f"自定义音色列表: {custom_voices}")
             
             selected_model = self.model_combo.currentData()
+            self.logger.info(f"当前选中模型: {selected_model}")
+            
+            # 添加音色到下拉框
             for voice in custom_voices:
-                print(f"处理音色: {voice}")  # 调试信息
                 voice_model = voice.get('model')
                 # 如果voice_model在映射表中，使用映射后的值
                 if voice_model in self.model_display_to_actual:
                     voice_model = self.model_display_to_actual[voice_model]
-                print(f"处理后的音色模型: {voice_model}, 当前选中模型: {selected_model}")  # 调试信息
+                self.logger.debug(f"处理音色 - 模型: {voice_model}, 名称: {voice.get('customName')}")
                 
                 if voice_model == selected_model:  # 仅添加当前模型的音色
                     voice_name = voice.get('customName', '未命名')
                     voice_id = voice.get('uri')
-                    print(f"添加自定义音色 - 名称: {voice_name}, ID: {voice_id}")  # 调试信息
                     if voice_id:  # 确保有效的voice_id
+                        self.logger.info(f"添加自定义音色: {voice_name} ({voice_id})")
                         self.voice_combo.addItem(f"自定义音色: {voice_name}", voice_id)
             
-            # 再添加默认音色选项
-            self.voice_combo.addItem("默认语音", None)  # 添加默认选项
+            # 添加默认音色
+            self.logger.info("添加默认音色选项")
+            self.voice_combo.addItem("默认语音", None)
             
             # 添加系统音色
             if selected_model in SiliconFlowClient.DEFAULT_VOICES:
                 for voice in SiliconFlowClient.DEFAULT_VOICES[selected_model]:
                     voice_name = voice.split(':')[-1]
+                    self.logger.info(f"添加系统音色: {voice_name}")
                     self.voice_combo.addItem(f"系统音色: {voice_name}", voice)
-                    print(f"添加系统音色: {voice_name}")  # 调试信息
-                        
+                    
         except Exception as e:
-            print(f"加载音色列表时出错: {str(e)}")  # 调试信息
+            self.logger.error("加载音色列表失败", exc_info=True)
             QMessageBox.warning(self, "错误", f"加载语音列表失败: {str(e)}")
             
     def update_voice_options(self):
@@ -404,23 +418,30 @@ class TextToSpeechApp(QMainWindow):
 
     def convert_text(self):
         if not self.client:
+            self.logger.error("API客户端未初始化")
             QMessageBox.warning(self, "错误", "请设置API密钥!")
             return
             
         text = self.text_input.toPlainText()
         if not text:
+            self.logger.warning("未输入转换文本")
             QMessageBox.warning(self, "错误", "请输入要转换的文本!")
             return
             
         voice_id = self.voice_combo.currentData()
         model = self.model_combo.currentData()
         
+        self.logger.info(f"准备转换文本: {text[:50]}...")
+        self.logger.debug(f"转换参数: model={model}, voice={voice_id}")
+        
         # 如果选择了付费模型，显示提醒
         if "(付费)" in self.model_combo.currentText():
+            self.logger.info("用户选择了付费模型，显示确认对话框")
             reply = QMessageBox.question(self, "付费提醒", 
                 "您选择的是付费模型，将会产生费用。是否继续？",
                 QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
             if reply == QMessageBox.StandardButton.No:
+                self.logger.info("用户取消了付费模型转换")
                 return
         
         # 获取参数值
@@ -429,16 +450,22 @@ class TextToSpeechApp(QMainWindow):
         gain = self.gain_input.value()
         response_format = self.format_combo.currentText()
         
+        self.logger.debug(f"音频参数: sample_rate={sample_rate}, speed={speed}, gain={gain}, format={response_format}")
+        
         self.convert_btn.setEnabled(False)
         self.progress_bar.setVisible(True)
         self.progress_bar.setRange(0, 0)  # 显示忙碌状态
         
-        self.conversion_thread = ConversionWorker(self.client, text, voice_id, model, sample_rate, speed, gain, response_format)
+        self.conversion_thread = ConversionWorker(
+            self.client, text, voice_id, model, sample_rate, speed, gain, response_format
+        )
         self.conversion_thread.finished.connect(self.handle_conversion_finished)
         self.conversion_thread.error.connect(self.handle_conversion_error)
+        self.logger.info("启动转换线程")
         self.conversion_thread.start()
-        
+
     def handle_conversion_finished(self, audio_data):
+        self.logger.info("文本转换完成，准备保存音频文件...")
         self.convert_btn.setEnabled(True)
         self.play_btn.setEnabled(True)
         self.progress_bar.setVisible(False)
@@ -496,25 +523,30 @@ class TextToSpeechApp(QMainWindow):
                 f.write(audio_content)
                 
             self.current_audio_url = audio_path
+            self.logger.info(f"音频文件已保存: {audio_path}")
             QMessageBox.information(self, '成功', f'文本转换完成! 文件已保存为: {new_file_name}')
         except Exception as e:
+            self.logger.error(f"保存音频文件失败: {str(e)}", exc_info=True)
             QMessageBox.warning(self, '错误', f'保存音频文件失败: {str(e)}')
             
     def handle_conversion_error(self, error_msg):
+        self.logger.error(f"转换失败: {error_msg}")
         self.convert_btn.setEnabled(True)
         self.progress_bar.setVisible(False)
         QMessageBox.warning(self, "错误", f"转换失败: {error_msg}")
         
     def play_audio(self):
         if not self.current_audio_url:
+            self.logger.warning("没有可播放的音频文件")
             return
-            
         try:
+            self.logger.info(f"开始播放音频: {self.current_audio_url}")
             self.audio_player.play(self.current_audio_url, self._on_playback_complete)
             self.play_btn.setEnabled(False)
             self.stop_btn.setEnabled(True)
         except Exception as e:
             QMessageBox.warning(self, "错误", f"播放失败: {str(e)}")
+            self.logger.error(f"音频播放失败: {str(e)}", exc_info=True)
             
     def _on_playback_complete(self):
         """
@@ -529,6 +561,7 @@ class TextToSpeechApp(QMainWindow):
         self.stop_btn.setEnabled(False)
         
     def load_config(self):
+        self.logger.info("加载配置文件...")
         if os.path.exists(self.config_file):
             with open(self.config_file, 'r') as f:
                 config = json.load(f)
@@ -553,8 +586,10 @@ class TextToSpeechApp(QMainWindow):
                             self.gain_input.setValue(settings.get('gain', 0.0))
                             self.format_combo.setCurrentText(settings.get('response_format', 'mp3'))
                             break
+                self.logger.debug(f"已加载配置: {config}")
 
     def save_config(self):
+        self.logger.info("保存配置文件...")
         config = {
             'api_key': self.api_key,
             'api_url': self.api_url,
@@ -583,6 +618,7 @@ class TextToSpeechApp(QMainWindow):
         os.makedirs('data', exist_ok=True)
         with open(self.config_file, 'w') as f:
             json.dump(config, f, ensure_ascii=False, indent=4)
+        self.logger.debug(f"已保存配置: {config}")
 
     def open_settings(self):
         dialog = SettingsDialog(self.api_key, self.api_url)
@@ -592,6 +628,7 @@ class TextToSpeechApp(QMainWindow):
             self.save_config()  # 保存配置文件
         
     def upload_voice(self):
+        self.logger.info("开始上传自定义音色...")
         dialog = UploadVoiceDialog([(self.model_combo.itemText(i), self.model_combo.itemData(i)) for i in range(self.model_combo.count())], self.model_combo.currentData(), self)
         if dialog.exec() == QDialog.DialogCode.Accepted:
             file_path, name, text, model = dialog.get_data()
@@ -619,9 +656,11 @@ class TextToSpeechApp(QMainWindow):
                     customName=name,
                     text=text
                 )
+                self.logger.info(f"音色上传成功: {name}")
                 QMessageBox.information(self, "成功", "音色上传成功!")
                 self.load_voice_list()  # 重新加载音色列表
             except Exception as e:
+                self.logger.error(f"音色上传失败: {str(e)}", exc_info=True)
                 QMessageBox.warning(self, "错误", f"上传失败: {str(e)}")
                 print(f"详细错误信息: {e}")
         
@@ -720,10 +759,16 @@ class TextToSpeechApp(QMainWindow):
             custom_voice_list_widget.setItemWidget(item, delete_button)
 
 def main():
-    app = QApplication(sys.argv)
-    window = TextToSpeechApp()
-    window.show()
-    sys.exit(app.exec())
+    logger.info("软件启动...")
+
+    try:
+        app = QApplication(sys.argv)
+        window = TextToSpeechApp()
+        window.show()
+        sys.exit(app.exec())
+    except Exception as e:
+        logger.error("软件崩溃!", exc_info=True)
+        raise
 
 if __name__ == '__main__':
     main() 
