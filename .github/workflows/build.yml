@@ -214,11 +214,24 @@ jobs:
         chmod +x "dist/Text2Voice.app/Contents/MacOS/Text2Voice"
         
         # 修复 Info.plist
-        /usr/libexec/PlistBuddy -c "Add :LSMinimumSystemVersion string 11.0" "dist/Text2Voice.app/Contents/Info.plist"
-        /usr/libexec/PlistBuddy -c "Add :NSHighResolutionCapable bool true" "dist/Text2Voice.app/Contents/Info.plist"
-        /usr/libexec/PlistBuddy -c "Add :LSArchitecturePriority array" "dist/Text2Voice.app/Contents/Info.plist"
-        /usr/libexec/PlistBuddy -c "Add :LSArchitecturePriority: string arm64" "dist/Text2Voice.app/Contents/Info.plist"
-        /usr/libexec/PlistBuddy -c "Add :LSArchitecturePriority: string x86_64" "dist/Text2Voice.app/Contents/Info.plist"
+        # 先检查条目是否存在，不存在才添加
+        if ! /usr/libexec/PlistBuddy -c "Print :LSMinimumSystemVersion" "dist/Text2Voice.app/Contents/Info.plist" 2>/dev/null; then
+          /usr/libexec/PlistBuddy -c "Add :LSMinimumSystemVersion string 11.0" "dist/Text2Voice.app/Contents/Info.plist"
+        fi
+        
+        if ! /usr/libexec/PlistBuddy -c "Print :NSHighResolutionCapable" "dist/Text2Voice.app/Contents/Info.plist" 2>/dev/null; then
+          /usr/libexec/PlistBuddy -c "Add :NSHighResolutionCapable bool true" "dist/Text2Voice.app/Contents/Info.plist"
+        fi
+        
+        if ! /usr/libexec/PlistBuddy -c "Print :LSArchitecturePriority" "dist/Text2Voice.app/Contents/Info.plist" 2>/dev/null; then
+          /usr/libexec/PlistBuddy -c "Add :LSArchitecturePriority array" "dist/Text2Voice.app/Contents/Info.plist"
+          /usr/libexec/PlistBuddy -c "Add :LSArchitecturePriority: string arm64" "dist/Text2Voice.app/Contents/Info.plist"
+          /usr/libexec/PlistBuddy -c "Add :LSArchitecturePriority: string x86_64" "dist/Text2Voice.app/Contents/Info.plist"
+        fi
+        
+        # 显示当前 Info.plist 内容
+        echo "Current Info.plist contents:"
+        /usr/libexec/PlistBuddy -c "Print" "dist/Text2Voice.app/Contents/Info.plist"
         
         # 创建 DMG
         create-dmg \
