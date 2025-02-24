@@ -20,7 +20,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [windows-latest, macos-latest, ubuntu-latest]
+        os: [windows-latest, macos-latest]
         python-version: ['3.8']
 
     steps:
@@ -30,18 +30,19 @@ jobs:
       uses: actions/setup-python@v5
       with:
         python-version: ${{ matrix.python-version }}
+        architecture: 'x64'  # 强制使用 x64 架构
         
     # 创建必要的文件和目录
     - name: Create necessary files
-      shell: bash  # 使用 bash 确保跨平台一致性
+      shell: bash
       run: |
-        # 创建 .env 文件（如果不存在）
+        # 创建 .env 文件
         if [ ! -f ".env" ]; then
           echo "Creating .env file..."
           echo "SILICON_API_KEY=dummy_key" > .env
         fi
         
-        # 创建目录（如果不存在）
+        # 创建目录
         for dir in "assets" "temp" "logs"; do
           if [ ! -d "$dir" ]; then
             echo "Creating $dir directory..."
@@ -49,62 +50,34 @@ jobs:
           fi
         done
         
-        # 显示文件结构
-        echo "Current file structure:"
-        ls -la
-        
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
         pip install -r requirements.txt
         pip install pyinstaller
-        
-    # Linux 系统安装 ImageMagick
-    - name: Install ImageMagick (Linux)
-      if: runner.os == 'Linux'
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y imagemagick
-        sudo apt-get install -y librsvg2-bin
-        convert --version
-        sudo sed -i 's/<policy domain="coder" rights="none" pattern="SVG" \/>/<policy domain="coder" rights="read|write" pattern="SVG" \/>/' /etc/ImageMagick-6/policy.xml
-        
-    # macOS 系统安装 ImageMagick
-    - name: Install ImageMagick (macOS)
+
+    # macOS 特定配置
+    - name: Install macOS dependencies
       if: runner.os == 'macOS'
       run: |
-        brew install imagemagick librsvg
-        magick --version
+        brew install qt6
+        # 强制使用 x86_64 架构重新安装 pygame
+        ARCHFLAGS="-arch x86_64" pip install --force-reinstall pygame
         
-    # Windows 系统安装 ImageMagick
-    - name: Install ImageMagick (Windows)
-      if: runner.os == 'Windows'
+        # 安装 PyQt6 依赖
+        python -m pip install PyQt6-Qt6
+        python -m pip install PyQt6-sip
+
+    - name: Set macOS environment
+      if: runner.os == 'macOS'
       run: |
-        choco install imagemagick.app -y
-        refreshenv
-        magick --version
+        echo "QT_DEBUG_PLUGINS=1" >> $GITHUB_ENV
         
-    - name: Generate Icons
-      shell: bash
-      run: |
-        chmod +x assets/create_icons.sh
-        if [ "$RUNNER_OS" == "Linux" ]; then
-          sed -i 's/magick convert/convert/g' assets/create_icons.sh
-          convert --version
-          convert -list format
-        else
-          magick --version
-          magick -list format
-        fi
-        ./assets/create_icons.sh
-        
+    # Windows 构建
     - name: Build (Windows)
       if: runner.os == 'Windows'
       shell: cmd
       run: |
-        echo "Checking files..."
-        dir .env
-        dir assets
         pyinstaller ^
         --noconsole ^
         --add-data ".env;." ^
@@ -114,52 +87,14 @@ jobs:
         --hidden-import PyQt6.QtCore ^
         --hidden-import PyQt6.QtGui ^
         --hidden-import PyQt6.QtWidgets ^
-        --exclude-module matplotlib ^
-        --exclude-module numpy ^
-        --exclude-module PIL ^
-        --exclude-module pandas ^
-        --exclude-module scipy ^
-        --exclude-module tkinter ^
-        --exclude-module PyQt6.QtSvg ^
-        --exclude-module PyQt6.QtNetwork ^
-        --exclude-module PyQt6.QtPrintSupport ^
         main.py
-        
-    - name: Install macOS dependencies
-      if: runner.os == 'macOS'
-      run: |
-        # 安装 Qt6
-        brew install qt6
-        brew install python-tk
-        
-        # 同时安装 Intel 和 ARM 版本的 Qt
-        arch -x86_64 brew install qt6 || true
-        arch -arm64 brew install qt6 || true
-        
-        # 安装 PyQt6 依赖
-        python -m pip install PyQt6-Qt6
-        python -m pip install PyQt6-sip
-        
-    - name: Set macOS environment
-      if: runner.os == 'macOS'
-      run: |
-        # Intel Mac 路径
-        echo "INTEL_QT_PATH=/usr/local/opt/qt6" >> $GITHUB_ENV
-        # Apple Silicon Mac 路径
-        echo "ARM_QT_PATH=/opt/homebrew/opt/qt6" >> $GITHUB_ENV
-        # 设置通用环境变量
-        echo "QT_DEBUG_PLUGINS=1" >> $GITHUB_ENV
-        
+
+    # macOS 构建
     - name: Build (macOS)
       if: runner.os == 'macOS'
       run: |
-        echo "Checking files..."
-        ls -la .env
-        ls -la assets
-        
         # Intel Mac 构建
-        echo "Building Intel Mac version..."
-        arch -x86_64 pyinstaller --noconsole \
+        pyinstaller --noconsole \
           --add-data ".env:." \
           --add-data "assets/*:assets" \
           --icon "assets/icon.icns" \
@@ -167,179 +102,59 @@ jobs:
           --hidden-import PyQt6.QtCore \
           --hidden-import PyQt6.QtGui \
           --hidden-import PyQt6.QtWidgets \
-          --exclude-module matplotlib \
-          --exclude-module numpy \
-          --exclude-module PIL \
-          --exclude-module pandas \
-          --exclude-module scipy \
-          --exclude-module tkinter \
-          --exclude-module PyQt6.QtSvg \
-          --exclude-module PyQt6.QtNetwork \
-          --exclude-module PyQt6.QtPrintSupport \
-          main.py
-          
-        # Apple Silicon 构建
-        echo "Building Apple Silicon version..."
-        arch -arm64 pyinstaller --noconsole \
-          --add-data ".env:." \
-          --add-data "assets/*:assets" \
-          --icon "assets/icon.icns" \
-          --name "Text2Voice-ARM" \
-          --hidden-import PyQt6.QtCore \
-          --hidden-import PyQt6.QtGui \
-          --hidden-import PyQt6.QtWidgets \
-          --exclude-module matplotlib \
-          --exclude-module numpy \
-          --exclude-module PIL \
-          --exclude-module pandas \
-          --exclude-module scipy \
-          --exclude-module tkinter \
-          --exclude-module PyQt6.QtSvg \
-          --exclude-module PyQt6.QtNetwork \
-          --exclude-module PyQt6.QtPrintSupport \
-          main.py
-          
-        # 分别打包两个版本
-        cd dist
-        zip -r ../Text2Voice-macos-intel-latest.zip Text2Voice-Intel.app
-        zip -r ../Text2Voice-macos-arm-latest.zip Text2Voice-ARM.app
-        cd ..
-        
-        echo "Created packages:"
-        ls -lh Text2Voice-macos-*-latest.zip
-
-    - name: Build (Linux)
-      if: runner.os == 'Linux'
-      run: |
-        # 确保文件存在
-        echo "Checking files..."
-        ls -la .env
-        ls -la assets
-        # 构建
-        pyinstaller --noconsole \
-          --add-data ".env:." \
-          --add-data "assets/*:assets" \
-          --icon "assets/icon.png" \
-          --name "Text2Voice" \
-          --hidden-import PyQt6.QtCore \
-          --hidden-import PyQt6.QtGui \
-          --hidden-import PyQt6.QtWidgets \
-          --exclude-module matplotlib \
-          --exclude-module numpy \
-          --exclude-module PIL \
-          --exclude-module pandas \
-          --exclude-module scipy \
-          --exclude-module tkinter \
-          --exclude-module PyQt6.QtSvg \
-          --exclude-module PyQt6.QtNetwork \
-          --exclude-module PyQt6.QtPrintSupport \
           main.py
 
+    # 创建 DMG (macOS)
     - name: Create DMG (macOS)
       if: runner.os == 'macOS'
       run: |
         brew install create-dmg
         
-        # 确保应用程序有正确的权限
-        chmod +x "dist/Text2Voice.app/Contents/MacOS/Text2Voice"
+        chmod +x "dist/Text2Voice-Intel.app/Contents/MacOS/Text2Voice-Intel"
         
-        # 修复 Info.plist
-        # 先检查条目是否存在，不存在才添加
-        if ! /usr/libexec/PlistBuddy -c "Print :LSMinimumSystemVersion" "dist/Text2Voice.app/Contents/Info.plist" 2>/dev/null; then
-          /usr/libexec/PlistBuddy -c "Add :LSMinimumSystemVersion string 11.0" "dist/Text2Voice.app/Contents/Info.plist"
-        fi
-        
-        if ! /usr/libexec/PlistBuddy -c "Print :NSHighResolutionCapable" "dist/Text2Voice.app/Contents/Info.plist" 2>/dev/null; then
-          /usr/libexec/PlistBuddy -c "Add :NSHighResolutionCapable bool true" "dist/Text2Voice.app/Contents/Info.plist"
-        fi
-        
-        if ! /usr/libexec/PlistBuddy -c "Print :LSArchitecturePriority" "dist/Text2Voice.app/Contents/Info.plist" 2>/dev/null; then
-          /usr/libexec/PlistBuddy -c "Add :LSArchitecturePriority array" "dist/Text2Voice.app/Contents/Info.plist"
-          /usr/libexec/PlistBuddy -c "Add :LSArchitecturePriority: string arm64" "dist/Text2Voice.app/Contents/Info.plist"
-          /usr/libexec/PlistBuddy -c "Add :LSArchitecturePriority: string x86_64" "dist/Text2Voice.app/Contents/Info.plist"
-        fi
-        
-        # 显示当前 Info.plist 内容
-        echo "Current Info.plist contents:"
-        /usr/libexec/PlistBuddy -c "Print" "dist/Text2Voice.app/Contents/Info.plist"
-        
-        # 创建 DMG
         create-dmg \
           --volname "Text2Voice" \
           --window-pos 200 120 \
           --window-size 800 400 \
           --icon-size 100 \
-          --icon "Text2Voice.app" 200 190 \
-          --hide-extension "Text2Voice.app" \
+          --icon "Text2Voice-Intel.app" 200 190 \
+          --hide-extension "Text2Voice-Intel.app" \
           --app-drop-link 600 185 \
-          "Text2Voice.dmg" \
+          "Text2Voice-Intel.dmg" \
           "dist/"
-          
+
+    # 打包制品
     - name: Zip Artifacts
       shell: bash
       run: |
-        echo "Creating zip archive..."
         cd dist
         if [ "${{ runner.os }}" == "Windows" ]; then
-          7z a ../Text2Voice-${{ runner.os }}.zip ./*
+          7z a ../Text2Voice-windows-latest.zip ./*
         elif [ "${{ runner.os }}" == "macOS" ]; then
-          zip -r ../Text2Voice-${{ runner.os }}.zip ./*
-        else
-          zip -r ../Text2Voice-${{ runner.os }}.zip ./*
+          zip -r ../Text2Voice-macos-intel-latest.zip ./*
         fi
         cd ..
-        # 重命名文件以匹配下载链接
-        if [ "${{ runner.os }}" == "Windows" ]; then
-          mv Text2Voice-Windows.zip Text2Voice-windows-latest.zip
-        elif [ "${{ runner.os }}" == "macOS" ]; then
-          mv Text2Voice-macOS.zip Text2Voice-macos-latest.zip
-        else
-          mv Text2Voice-Linux.zip Text2Voice-ubuntu-latest.zip
-        fi
-        ls -la Text2Voice-*.zip
-        echo "Zip files created:"
-        for f in Text2Voice-*.zip; do
-          echo "- $f ($(stat -f%z "$f" 2>/dev/null || stat -c%s "$f") bytes)"
-        done
 
+    # 上传制品
     - name: Upload Artifacts
       uses: actions/upload-artifact@v4
       with:
-        name: Text2Voice-${{ matrix.os }}
-        path: Text2Voice-${{ matrix.os }}.zip
+        name: Text2Voice-${{ runner.os }}
+        path: |
+          Text2Voice-*.zip
+          Text2Voice-*.dmg
         compression-level: 9
         retention-days: 90
 
+    # 创建发布
     - name: Create Release
       if: startsWith(github.ref, 'refs/tags/')
       uses: softprops/action-gh-release@v2
       with:
         name: Release ${{ github.ref_name }}
-        body: |
-          ## Text2Voice Release ${{ github.ref_name }}
-          
-          ### 下载
-          - [Windows 版本 (Text2Voice-windows-latest.zip)](https://github.com/axdlee/text2voice/releases/download/${{ github.ref_name }}/Text2Voice-windows-latest.zip)
-          - [macOS Intel 版本 (Text2Voice-macos-intel-latest.zip)](https://github.com/axdlee/text2voice/releases/download/${{ github.ref_name }}/Text2Voice-macos-intel-latest.zip)
-          - [macOS Apple Silicon 版本 (Text2Voice-macos-arm-latest.zip)](https://github.com/axdlee/text2voice/releases/download/${{ github.ref_name }}/Text2Voice-macos-arm-latest.zip)
-          - [Linux 版本 (Text2Voice-ubuntu-latest.zip)](https://github.com/axdlee/text2voice/releases/download/${{ github.ref_name }}/Text2Voice-ubuntu-latest.zip)
-          
-          ### 更新内容
-          - 请在此处添加版本更新说明
-          
-          ### 构建信息
-          - 构建时间: ${{ github.event.head_commit.timestamp }}
-          - 提交信息: ${{ github.event.head_commit.message }}
-          - 构建分支: ${{ github.ref_name }}
-          
-          ### 下载统计
-          ![下载次数](https://img.shields.io/github/downloads/axdlee/text2voice/${{ github.ref_name }}/total)
-        draft: false
-        prerelease: false
         files: |
           Text2Voice-windows-latest.zip
           Text2Voice-macos-intel-latest.zip
-          Text2Voice-macos-arm-latest.zip
-          Text2Voice-ubuntu-latest.zip
+          Text2Voice-*.dmg
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} 
