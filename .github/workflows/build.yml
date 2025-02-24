@@ -30,45 +30,61 @@ jobs:
         pip install -r requirements.txt
         pip install pyinstaller
         
-    - name: Install ImageMagick
-      if: matrix.os == 'ubuntu-latest'
+    # Linux 系统安装 ImageMagick
+    - name: Install ImageMagick (Linux)
+      if: runner.os == 'Linux'
       run: |
         sudo apt-get update
         sudo apt-get install -y imagemagick
+        sudo apt-get install -y librsvg2-bin  # 添加 SVG 支持
+        # 验证安装
+        magick --version
         
+    # macOS 系统安装 ImageMagick
     - name: Install ImageMagick (macOS)
-      if: matrix.os == 'macos-latest'
+      if: runner.os == 'macOS'
       run: |
-        brew install imagemagick
+        brew install imagemagick librsvg
+        # 验证安装
+        magick --version
         
+    # Windows 系统安装 ImageMagick
     - name: Install ImageMagick (Windows)
-      if: matrix.os == 'windows-latest'
+      if: runner.os == 'Windows'
       run: |
         choco install imagemagick.app -y
+        # 刷新环境变量
+        refreshenv
+        # 验证安装
+        magick --version
         
     - name: Generate Icons
       shell: bash
       run: |
         chmod +x assets/create_icons.sh
+        # 显示 ImageMagick 版本和支持的格式
+        magick --version
+        magick -list format
+        # 运行图标生成脚本
         ./assets/create_icons.sh
         
     - name: Build (Windows)
-      if: matrix.os == 'windows-latest'
+      if: runner.os == 'Windows'
       run: |
         pyinstaller --noconsole --add-data ".env;." --add-data "assets/*;assets" --icon "assets/icon.ico" --name "Text2Voice" main.py
         
     - name: Build (macOS)
-      if: matrix.os == 'macos-latest'
+      if: runner.os == 'macOS'
       run: |
         pyinstaller --noconsole --add-data ".env:." --add-data "assets/*:assets" --icon "assets/icon.icns" --name "Text2Voice" main.py
         
     - name: Build (Linux)
-      if: matrix.os == 'ubuntu-latest'
+      if: runner.os == 'Linux'
       run: |
         pyinstaller --noconsole --add-data ".env:." --add-data "assets/*:assets" --icon "assets/icon.png" --name "Text2Voice" main.py
         
     - name: Create DMG (macOS)
-      if: matrix.os == 'macos-latest'
+      if: runner.os == 'macOS'
       run: |
         brew install create-dmg
         create-dmg \
