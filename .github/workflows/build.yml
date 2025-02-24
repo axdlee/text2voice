@@ -34,9 +34,17 @@ jobs:
       uses: actions/setup-python@v5
       with:
         python-version: ${{ matrix.python-version }}
-        architecture: 'x64'  # 强制使用 x64 架构
-        cache: 'pip'  # 启用 pip 缓存
-        
+        architecture: 'x64'
+        cache: 'pip'
+        check-latest: true  # 确保使用最新的补丁版本
+
+    - name: Verify Python installation
+      run: |
+        python --version
+        which python
+        python -c "import sys; print(sys.prefix)"
+        python -m pip --version
+
     # 创建必要的文件和目录
     - name: Create necessary files and directories
       shell: bash
@@ -69,11 +77,28 @@ jobs:
     - name: Install macOS dependencies
       if: runner.os == 'macOS'
       run: |
+        # 安装系统依赖
+        brew install gettext
+        brew link gettext --force
         brew install qt6
+        
+        # 验证 gettext 安装
+        echo "Checking gettext installation..."
+        ls -l /usr/local/opt/gettext/lib/
+        otool -L /usr/local/opt/gettext/lib/libintl*.dylib
+        
+        # 设置环境变量
+        echo "Setting up environment variables..."
+        echo "LDFLAGS=-L/usr/local/opt/gettext/lib" >> $GITHUB_ENV
+        echo "CPPFLAGS=-I/usr/local/opt/gettext/include" >> $GITHUB_ENV
+        
         # 强制使用 x86_64 架构重新安装 pygame
+        echo "Installing pygame..."
         ARCHFLAGS="-arch x86_64" pip install --force-reinstall pygame
         
         # 安装 PyQt6 依赖
+        echo "Installing PyQt6 dependencies..."
+        python -m pip install --upgrade pip
         python -m pip install PyQt6-Qt6
         python -m pip install PyQt6-sip
         
@@ -85,19 +110,37 @@ jobs:
       run: |
         echo "QT_DEBUG_PLUGINS=1" >> $GITHUB_ENV
         echo "PYTHONPATH=${GITHUB_WORKSPACE}" >> $GITHUB_ENV
+        echo "DYLD_LIBRARY_PATH=/usr/local/opt/gettext/lib:$DYLD_LIBRARY_PATH" >> $GITHUB_ENV
         
     # Windows 构建
     - name: Build (Windows)
       if: runner.os == 'Windows'
       shell: cmd
       run: |
+        # 检查目录结构
+        dir
+        
+        # 确保必要目录存在
+        if not exist "resources" mkdir resources
+        if not exist "assets" mkdir assets
+        if not exist "temp" mkdir temp
+        if not exist "logs" mkdir logs
+        
+        # 创建一个空的资源文件，确保目录不为空
+        echo. > resources\placeholder.txt
+        echo. > assets\placeholder.txt
+        
+        # 显示目录结构
+        echo "Directory structure after creation:"
+        dir /s
+        
+        # 执行构建
         pyinstaller ^
         --noconsole ^
         --add-data ".env;." ^
-        --add-data "assets/*;assets" ^
-        --add-data "resources/*;resources" ^
-        --add-data "ui/styles/*;ui/styles" ^
-        --icon "assets/icon.ico" ^
+        --add-data "assets;assets" ^
+        --add-data "resources;resources" ^
+        --add-data "ui/styles;ui/styles" ^
         --name "Text2Voice" ^
         --hidden-import PyQt6.QtCore ^
         --hidden-import PyQt6.QtGui ^
@@ -110,12 +153,26 @@ jobs:
     - name: Build (macOS)
       if: runner.os == 'macOS'
       run: |
+        # 检查目录结构
+        ls -la
+        
+        # 确保必要目录存在
+        mkdir -p resources assets temp logs
+        
+        # 创建占位文件
+        touch resources/placeholder.txt
+        touch assets/placeholder.txt
+        
+        # 显示目录结构
+        echo "Directory structure after creation:"
+        find . -type d
+        
+        # 执行构建
         pyinstaller --noconsole \
           --add-data ".env:." \
-          --add-data "assets/*:assets" \
-          --add-data "resources/*:resources" \
-          --add-data "ui/styles/*:ui/styles" \
-          --icon "assets/icon.icns" \
+          --add-data "assets:assets" \
+          --add-data "resources:resources" \
+          --add-data "ui/styles:ui/styles" \
           --name "Text2Voice-Intel" \
           --hidden-import PyQt6.QtCore \
           --hidden-import PyQt6.QtGui \
