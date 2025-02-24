@@ -1,4 +1,5 @@
 import requests
+import base64
 from typing import Dict, Any, List, Optional
 from api.base_client import BaseTTSClient
 
@@ -127,24 +128,55 @@ class SiliconFlowClient(BaseTTSClient):
             self.logger.error(f"删除音色失败: {voice_id}", exc_info=True)
             raise
             
-    def upload_voice(self, audio: str, model: str, 
+    def upload_voice(self, audio_data: bytes, model: str, 
                     custom_name: str, text: str) -> Dict[str, Any]:
-        """上传自定义音色"""
+        """上传自定义音色
+        Args:
+            audio_data: 音频数据
+            model: 模型ID
+            custom_name: 音色名称
+            text: 音频对应的文本内容
+        """
         try:
-            url = f"{self.base_url}/uploads/audio/voice"
-            self.logger.info(f"上传音色: {custom_name}")
-
+            # 检查模型是否存在
             if model not in self.AVAILABLE_MODELS:
                 raise ValueError(f"模型 {model} 不存在")
             
-            files = {
-                'audio': (None, audio),
-                'model': (None, model),
-                'customName': (None, custom_name),
-                'text': (None, text)
+            # 根据文档修正URL
+            url = f"{self.base_url}/uploads/audio/voice"
+            
+            # 将音频数据转换为base64
+            audio_base64 = base64.b64encode(audio_data).decode('utf-8')
+            audio_data_uri = f"data:audio/mpeg;base64,{audio_base64}"
+            
+            # 准备请求数据
+            data = {
+                'audio': audio_data_uri,
+                'model': model,
+                'customName': custom_name,
+                'text': text
             }
             
-            response = requests.post(url, headers=self.headers, files=files)
+            # 添加调试日志
+            self.logger.debug(f"上传音色请求参数: model={model}, customName={custom_name}, text={text}")
+            self.logger.debug(f"音频数据大小: {len(audio_data)} bytes")
+            
+            # 发送请求
+            headers = {
+                **self.headers,
+                'Content-Type': 'application/json'
+            }
+            
+            response = requests.post(
+                url, 
+                headers=headers,
+                json=data  # 使用 json 参数发送 JSON 数据
+            )
+            
+            # 如果是 400 错误，记录响应内容
+            if response.status_code == 400:
+                self.logger.error(f"服务器返回错误: {response.text}")
+            
             response.raise_for_status()
             
             result = response.json()
@@ -152,7 +184,7 @@ class SiliconFlowClient(BaseTTSClient):
             return result
             
         except Exception as e:
-            self.logger.error(f"上传音色失败: {custom_name}", exc_info=True)
+            self.logger.error("上传音色失败", exc_info=True)
             raise
             
     def get_available_models(self) -> Dict[str, str]:

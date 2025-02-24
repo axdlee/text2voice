@@ -59,8 +59,8 @@ class TTSService:
         """
         self.logger.info(f"上传音色: {voice_name}")
         return self.client.upload_voice(
-            voice_name=voice_name,
-            model=model,
             audio_data=audio_data,
+            model=model,
+            custom_name=voice_name,
             text=text
         ) 
