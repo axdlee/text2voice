@@ -106,7 +106,24 @@ jobs:
         dir .env
         dir assets
         # 构建
-        pyinstaller --noconsole --add-data ".env;." --add-data "assets/*;assets" --icon "assets/icon.ico" --name "Text2Voice" main.py
+        pyinstaller --noconsole \
+          --add-data ".env;." \
+          --add-data "assets/*;assets" \
+          --icon "assets/icon.ico" \
+          --name "Text2Voice" \
+          --hidden-import PyQt6.QtCore \
+          --hidden-import PyQt6.QtGui \
+          --hidden-import PyQt6.QtWidgets \
+          --exclude-module matplotlib \
+          --exclude-module numpy \
+          --exclude-module PIL \
+          --exclude-module pandas \
+          --exclude-module scipy \
+          --exclude-module tkinter \
+          --exclude-module PyQt6.QtSvg \
+          --exclude-module PyQt6.QtNetwork \
+          --exclude-module PyQt6.QtPrintSupport \
+          main.py
         
     - name: Install macOS dependencies
       if: runner.os == 'macOS'
@@ -141,47 +158,53 @@ jobs:
         ls -la .env
         ls -la assets
         
-        # Intel Mac 构建
-        echo "Building for Intel Mac..."
-        ARCH="x86_64" pyinstaller --noconsole \
+        # 只构建当前平台架构
+        pyinstaller --noconsole \
           --add-data ".env:." \
           --add-data "assets/*:assets" \
           --icon "assets/icon.icns" \
-          --name "Text2Voice-Intel" \
-          --add-binary "${INTEL_QT_PATH}/lib:Qt6" \
-          --add-binary "${INTEL_QT_PATH}/plugins:Qt6/plugins" \
+          --name "Text2Voice" \
           --hidden-import PyQt6.QtCore \
           --hidden-import PyQt6.QtGui \
           --hidden-import PyQt6.QtWidgets \
-          --collect-all PyQt6 \
+          --exclude-module matplotlib \
+          --exclude-module numpy \
+          --exclude-module PIL \
+          --exclude-module pandas \
+          --exclude-module scipy \
+          --exclude-module tkinter \
+          --exclude-module PyQt6.QtSvg \
+          --exclude-module PyQt6.QtNetwork \
+          --exclude-module PyQt6.QtPrintSupport \
           main.py
-          
-        # Apple Silicon Mac 构建
-        echo "Building for Apple Silicon Mac..."
-        ARCH="arm64" pyinstaller --noconsole \
+
+    - name: Build (Linux)
+      if: runner.os == 'Linux'
+      run: |
+        # 确保文件存在
+        echo "Checking files..."
+        ls -la .env
+        ls -la assets
+        # 构建
+        pyinstaller --noconsole \
           --add-data ".env:." \
           --add-data "assets/*:assets" \
-          --icon "assets/icon.icns" \
-          --name "Text2Voice-ARM" \
-          --add-binary "${ARM_QT_PATH}/lib:Qt6" \
-          --add-binary "${ARM_QT_PATH}/plugins:Qt6/plugins" \
+          --icon "assets/icon.png" \
+          --name "Text2Voice" \
           --hidden-import PyQt6.QtCore \
           --hidden-import PyQt6.QtGui \
           --hidden-import PyQt6.QtWidgets \
-          --collect-all PyQt6 \
+          --exclude-module matplotlib \
+          --exclude-module numpy \
+          --exclude-module PIL \
+          --exclude-module pandas \
+          --exclude-module scipy \
+          --exclude-module tkinter \
+          --exclude-module PyQt6.QtSvg \
+          --exclude-module PyQt6.QtNetwork \
+          --exclude-module PyQt6.QtPrintSupport \
           main.py
-          
-        # 创建通用二进制（Universal Binary）
-        echo "Creating Universal Binary..."
-        mkdir -p "dist/Text2Voice.app/Contents/MacOS"
-        lipo "dist/Text2Voice-Intel.app/Contents/MacOS/Text2Voice-Intel" \
-          "dist/Text2Voice-ARM.app/Contents/MacOS/Text2Voice-ARM" \
-          -create -output "dist/Text2Voice.app/Contents/MacOS/Text2Voice"
-          
-        # 复制资源文件
-        cp -R "dist/Text2Voice-Intel.app/Contents/Resources" "dist/Text2Voice.app/Contents/"
-        cp -R "dist/Text2Voice-Intel.app/Contents/Info.plist" "dist/Text2Voice.app/Contents/"
-        
+
     - name: Create DMG (macOS)
       if: runner.os == 'macOS'
       run: |
