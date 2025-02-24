@@ -100,30 +100,30 @@ jobs:
         
     - name: Build (Windows)
       if: runner.os == 'Windows'
+      shell: cmd
       run: |
-        # 确保文件存在
         echo "Checking files..."
         dir .env
         dir assets
-        # 构建
-        pyinstaller --noconsole \
-          --add-data ".env;." \
-          --add-data "assets/*;assets" \
-          --icon "assets/icon.ico" \
-          --name "Text2Voice" \
-          --hidden-import PyQt6.QtCore \
-          --hidden-import PyQt6.QtGui \
-          --hidden-import PyQt6.QtWidgets \
-          --exclude-module matplotlib \
-          --exclude-module numpy \
-          --exclude-module PIL \
-          --exclude-module pandas \
-          --exclude-module scipy \
-          --exclude-module tkinter \
-          --exclude-module PyQt6.QtSvg \
-          --exclude-module PyQt6.QtNetwork \
-          --exclude-module PyQt6.QtPrintSupport \
-          main.py
+        pyinstaller ^
+        --noconsole ^
+        --add-data ".env;." ^
+        --add-data "assets/*;assets" ^
+        --icon "assets/icon.ico" ^
+        --name "Text2Voice" ^
+        --hidden-import PyQt6.QtCore ^
+        --hidden-import PyQt6.QtGui ^
+        --hidden-import PyQt6.QtWidgets ^
+        --exclude-module matplotlib ^
+        --exclude-module numpy ^
+        --exclude-module PIL ^
+        --exclude-module pandas ^
+        --exclude-module scipy ^
+        --exclude-module tkinter ^
+        --exclude-module PyQt6.QtSvg ^
+        --exclude-module PyQt6.QtNetwork ^
+        --exclude-module PyQt6.QtPrintSupport ^
+        main.py
         
     - name: Install macOS dependencies
       if: runner.os == 'macOS'
