@@ -152,15 +152,21 @@ jobs:
           ## Text2Voice Release ${{ github.ref_name }}
           
           ### 下载
-          - Windows: [Text2Voice-windows-latest.zip](Text2Voice-windows-latest.zip)
-          - macOS: [Text2Voice-macos-latest.zip](Text2Voice-macos-latest.zip)
-          - Linux: [Text2Voice-ubuntu-latest.zip](Text2Voice-ubuntu-latest.zip)
+          - [Windows 版本 (Text2Voice-windows-latest.zip)](https://github.com/xdlee110/text2voice/releases/download/${{ github.ref_name }}/Text2Voice-windows-latest.zip)
+          - [macOS 版本 (Text2Voice-macos-latest.zip)](https://github.com/xdlee110/text2voice/releases/download/${{ github.ref_name }}/Text2Voice-macos-latest.zip)
+          - [Linux 版本 (Text2Voice-ubuntu-latest.zip)](https://github.com/xdlee110/text2voice/releases/download/${{ github.ref_name }}/Text2Voice-ubuntu-latest.zip)
           
           ### 更新内容
           - 请在此处添加版本更新说明
+          
+          ### 构建信息
+          - 构建时间: ${{ github.event.head_commit.timestamp }}
+          - 提交信息: ${{ github.event.head_commit.message }}
+          - 构建分支: ${{ github.ref_name }}
         draft: false
         prerelease: false
-        files: Text2Voice-*.zip  # 简化文件匹配模式
+        files: |
+          Text2Voice-*.zip
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -177,6 +183,10 @@ jobs:
         fi
         cd ..
         ls -la Text2Voice-*.zip
+        echo "Zip files created:"
+        for f in Text2Voice-*.zip; do
+          echo "- $f ($(stat -f%z "$f" 2>/dev/null || stat -c%s "$f") bytes)"
+        done
 
     - name: Upload Artifacts
       uses: actions/upload-artifact@v4
