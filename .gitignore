@@ -11,3 +11,24 @@ data/config.json
 # Logs
 data/logs/
 *.log
+
+# 忽略所有 .DS_Store 文件
+.DS_Store
+
+# 忽略所有 .idea 文件夹
+.idea/
+
+# 忽略所有 .vscode 文件夹
+.vscode/
+
+# 忽略所有 .pytest_cache 文件夹
+.pytest_cache/
+
+# 忽略temp文件夹
+temp/*
+
+
+
+
+
+
