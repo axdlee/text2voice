@@ -27,10 +27,12 @@ class CustomFormatter(logging.Formatter):
             record.color_end = ''
         return super().format(record)
 
-def setup_logger(name='Text2Voice'):
-    """设置日志系统"""
-    
+def get_logger(name='Text2Voice'):
+    """获取日志记录器"""
     logger = logging.getLogger(name)
+    if logger.handlers:  # 如果已经有处理器，直接返回
+        return logger
+        
     logger.setLevel(logging.DEBUG)
     
     # 创建日志目录
@@ -61,13 +63,12 @@ def setup_logger(name='Text2Voice'):
         backupCount=30,  # 保留30天的日志
         encoding='utf-8'
     )
+    time_handler.setFormatter(file_formatter)
     
     # 控制台处理器 - 带颜色
     console_handler = logging.StreamHandler()
     console_handler.setLevel(logging.INFO)
-    console_formatter = CustomFormatter(
-        '%(color_start)s%(levelname)s%(color_end)s: %(message)s'
-    )
+    console_formatter = logging.Formatter('%(levelname)s: %(message)s')
     console_handler.setFormatter(console_formatter)
     
     # 错误日志处理器 - 单独记录错误
@@ -99,4 +100,8 @@ def setup_logger(name='Text2Voice'):
     return logger
 
 # 创建全局日志实例
-logger = setup_logger() 
+logger = get_logger()
+
+def get_child_logger(name):
+    """获取子日志记录器"""
+    return get_logger(f"Text2Voice.{name}") 

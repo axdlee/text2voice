@@ -15,40 +15,40 @@ from typing import Dict, Any
 import base64
 import re
 import time
-from utils.logger import logger
+from utils.logger import logger, get_child_logger
+from utils.config_manager import ConfigManager
+from utils.audio_manager import AudioManager
+from services.tts_service import TTSService
 
 # 加载环境变量
 load_dotenv()
 
 class ConversionWorker(QThread):
-    finished = pyqtSignal(object)  # 改为object类型，可以传递二进制数据
+    finished = pyqtSignal(object)
     error = pyqtSignal(str)
     
-    def __init__(self, client, text, voice_id=None, model=None, sample_rate=32000, speed=1.0, gain=0.0, response_format="mp3"):
+    def __init__(self, tts_service, text, voice_id=None, model=None, sample_rate=32000, speed=1.0, gain=0.0, response_format="mp3"):
         super().__init__()
-        self.logger = logger.getChild('worker')
+        self.logger = get_child_logger('worker')
         self.logger.info("初始化转换线程...")
-        self.client = client
+        self.tts_service = tts_service
         self.text = text
-        self.voice_id = voice_id
-        self.model = model
-        self.sample_rate = sample_rate
-        self.speed = speed
-        self.gain = gain
-        self.response_format = response_format
+        self.params = {
+            'voice_id': voice_id,
+            'model': model,
+            'sample_rate': sample_rate,
+            'speed': speed,
+            'gain': gain,
+            'response_format': response_format
+        }
         
     def run(self):
         try:
             self.logger.info("开始文本转语音任务...")
-            self.logger.debug(f"转换参数: model={self.model}, voice={self.voice_id}, format={self.response_format}")
-            result = self.client.create_speech(
+            self.logger.debug(f"转换参数: {self.params}")
+            result = self.tts_service.convert_text(
                 text=self.text,
-                voice_id=self.voice_id,
-                model=self.model,
-                response_format=self.response_format,
-                sample_rate=self.sample_rate,
-                speed=self.speed,
-                gain=self.gain
+                params=self.params
             )
             self.logger.info("转换任务完成")
             self.finished.emit(result)
@@ -152,37 +152,30 @@ class LoadVoiceListThread(QThread):
 
 class TextToSpeechApp(QMainWindow):
     def __init__(self):
-        # 添加模型名称映射
-        self.model_display_to_actual = {
-            "CosyVoice2-0.5B (免费)": "FunAudioLLM/CosyVoice2-0.5B",
-            "GPT-SoVITS (免费)": "RVC-Boss/GPT-SoVITS",
-            "Fish-Speech-1.5 (付费)": "fishaudio/fish-speech-1.5",
-            "Fish-Speech-1.4 (付费)": "fishaudio/fish-speech-1.4"
-        }
         super().__init__()
         self.logger = logger.getChild('ui')
         self.logger.info("初始化用户界面...")
-        self.config_file = 'data/config.json'
-        self.api_key = None
-        self.api_url = None
-        self.output_directory = 'temp'  # 默认输出目录
-        self.client = None
-        self.audio_player = AudioPlayer()
+        
+        # 初始化服务
+        self.config = ConfigManager()
+        self.audio_mgr = AudioManager(self.config.get('output_directory', 'temp'))
+        self.tts_service = None
+        
+        # 初始化变量
+        self.api_key = self.config.get('api_key')
+        self.api_url = self.config.get('api_url')
+        self.output_directory = self.config.get('output_directory', 'temp')
         self.current_audio_url = None
         self.conversion_thread = None
+        self.delete_buttons = []
         self.custom_voice_list = QListWidget()
-        self.delete_buttons = []  # 存储删除按钮的列表
         
-        # 先创建UI
-        self.initUI()
-        
-        # 再加载配置
-        self.load_config()
-        
-        # 初始化客户端并加载音色列表
+        # 初始化 API 客户端
         if self.api_key:
-            self.client = SiliconFlowClient(self.api_key, self.api_url)
-            self.load_voice_list()  # 只在客户端初始化后加载一次
+            self.tts_service = TTSService(self.api_key, self.api_url)
+            
+        # 初始化UI
+        self.initUI()
 
     def initUI(self):
         self.setWindowTitle('文本转语音工具')
@@ -264,8 +257,8 @@ class TextToSpeechApp(QMainWindow):
         left_layout.addWidget(self.progress_bar)
         
         # 自定义音色列表
-        #left_layout.addWidget(QLabel('自定义音色列表:'))
-        #left_layout.addWidget(self.custom_voice_list)
+        self.custom_voice_list = QListWidget()
+        self.custom_voice_list.itemClicked.connect(self.on_custom_voice_clicked)
         
         # 控制按钮区
         button_layout = QHBoxLayout()
@@ -319,7 +312,7 @@ class TextToSpeechApp(QMainWindow):
         self.custom_voice_list.itemClicked.connect(self.on_custom_voice_clicked)
         
     def load_voice_list(self):
-        if not self.client:
+        if not self.tts_service:
             self.logger.error("API客户端未初始化")
             QMessageBox.warning(self, "错误", "API客户端未初始化!")
             return
@@ -330,24 +323,16 @@ class TextToSpeechApp(QMainWindow):
             self.voice_combo.clear()
             
             # 加载系统音色
-            voices = self.client.get_voice_list()
+            response = self.tts_service.get_voices(self.model_combo.currentData())
+            voices = response.get('result', [])
             self.logger.debug(f"获取到的音色列表: {voices}")
-            
-            # 先添加自定义音色
-            custom_voices = voices.get('result', [])
-            self.logger.debug(f"自定义音色列表: {custom_voices}")
             
             selected_model = self.model_combo.currentData()
             self.logger.info(f"当前选中模型: {selected_model}")
             
             # 添加音色到下拉框
-            for voice in custom_voices:
+            for voice in voices:
                 voice_model = voice.get('model')
-                # 如果voice_model在映射表中，使用映射后的值
-                if voice_model in self.model_display_to_actual:
-                    voice_model = self.model_display_to_actual[voice_model]
-                self.logger.debug(f"处理音色 - 模型: {voice_model}, 名称: {voice.get('customName')}")
-                
                 if voice_model == selected_model:  # 仅添加当前模型的音色
                     voice_name = voice.get('customName', '未命名')
                     voice_id = voice.get('uri')
@@ -371,7 +356,7 @@ class TextToSpeechApp(QMainWindow):
             QMessageBox.warning(self, "错误", f"加载语音列表失败: {str(e)}")
             
     def update_voice_options(self):
-        if not self.client:
+        if not self.tts_service:
             return
         
         try:
@@ -379,7 +364,7 @@ class TextToSpeechApp(QMainWindow):
             self.voice_combo.clear()
             
             selected_model = self.model_combo.currentData()
-            voices = self.client.get_voice_list()
+            voices = self.tts_service.get_voices(selected_model)
             
             # 先添加自定义音色
             for voice in voices.get('result', []):
@@ -417,7 +402,7 @@ class TextToSpeechApp(QMainWindow):
             self.sample_rate_combo.setCurrentText("44100")
 
     def convert_text(self):
-        if not self.client:
+        if not self.tts_service:
             self.logger.error("API客户端未初始化")
             QMessageBox.warning(self, "错误", "请设置API密钥!")
             return
@@ -457,7 +442,7 @@ class TextToSpeechApp(QMainWindow):
         self.progress_bar.setRange(0, 0)  # 显示忙碌状态
         
         self.conversion_thread = ConversionWorker(
-            self.client, text, voice_id, model, sample_rate, speed, gain, response_format
+            self.tts_service, text, voice_id, model, sample_rate, speed, gain, response_format
         )
         self.conversion_thread.finished.connect(self.handle_conversion_finished)
         self.conversion_thread.error.connect(self.handle_conversion_error)
@@ -507,21 +492,8 @@ class TextToSpeechApp(QMainWindow):
                     new_file_name += '.pcm'
 
             # 保存到用户选择的输出目录
-            os.makedirs(self.output_directory, exist_ok=True)
-            audio_path = os.path.join(self.output_directory, new_file_name)
+            audio_path = self.audio_mgr.save_audio(audio_data, new_file_name)
             
-            # 如果是URL，下载音频
-            if isinstance(audio_data, str) and audio_data.startswith('http'):
-                response = requests.get(audio_data)
-                response.raise_for_status()
-                audio_content = response.content
-            else:
-                # 如果是二进制数据，直接使用
-                audio_content = audio_data
-                
-            with open(audio_path, 'wb') as f:
-                f.write(audio_content)
-                
             self.current_audio_url = audio_path
             self.logger.info(f"音频文件已保存: {audio_path}")
             QMessageBox.information(self, '成功', f'文本转换完成! 文件已保存为: {new_file_name}')
@@ -541,7 +513,7 @@ class TextToSpeechApp(QMainWindow):
             return
         try:
             self.logger.info(f"开始播放音频: {self.current_audio_url}")
-            self.audio_player.play(self.current_audio_url, self._on_playback_complete)
+            self.audio_mgr.play(self.current_audio_url, self._on_playback_complete)
             self.play_btn.setEnabled(False)
             self.stop_btn.setEnabled(True)
         except Exception as e:
@@ -556,39 +528,41 @@ class TextToSpeechApp(QMainWindow):
         self.stop_btn.setEnabled(False)
         
     def stop_audio(self):
-        self.audio_player.stop()
+        self.audio_mgr.stop()
         self.play_btn.setEnabled(True)
         self.stop_btn.setEnabled(False)
         
     def load_config(self):
+        """加载配置"""
         self.logger.info("加载配置文件...")
-        if os.path.exists(self.config_file):
-            with open(self.config_file, 'r') as f:
-                config = json.load(f)
-                self.api_key = config.get('api_key')
-                self.api_url = config.get('api_url')
-                self.output_directory = config.get('output_directory', 'temp')  # 加载输出目录
-                
-                # 加载模型设置
-                if 'model_settings' in config:
-                    model_settings = config['model_settings']
-                    for model, settings in model_settings.items():
-                        # 如果是当前选中的模型，应用其设置
-                        if model == self.model_combo.currentData():
-                            # 设置语音
-                            if settings.get('voice_id'):
-                                index = self.voice_combo.findData(settings.get('voice_id'))
-                                if index >= 0:
-                                    self.voice_combo.setCurrentIndex(index)
-                            # 设置其他参数
-                            self.sample_rate_combo.setCurrentText(str(settings.get('sample_rate', 32000)))
-                            self.speed_input.setValue(settings.get('speed', 1.0))
-                            self.gain_input.setValue(settings.get('gain', 0.0))
-                            self.format_combo.setCurrentText(settings.get('response_format', 'mp3'))
-                            break
-                self.logger.debug(f"已加载配置: {config}")
+        
+        # 加载基本设置
+        self.api_key = self.config.get('api_key')
+        self.api_url = self.config.get('api_url')
+        self.output_directory = self.config.get('output_directory', 'temp')
+        
+        # 加载模型设置
+        model_settings = self.config.get('model_settings', {})
+        selected_model = self.model_combo.currentData()
+        if selected_model in model_settings:
+            settings = model_settings[selected_model]
+            
+            # 设置语音
+            if settings.get('voice_id'):
+                index = self.voice_combo.findData(settings.get('voice_id'))
+                if index >= 0:
+                    self.voice_combo.setCurrentIndex(index)
+                    
+            # 设置其他参数
+            self.sample_rate_combo.setCurrentText(str(settings.get('sample_rate', 32000)))
+            self.speed_input.setValue(settings.get('speed', 1.0))
+            self.gain_input.setValue(settings.get('gain', 0.0))
+            self.format_combo.setCurrentText(settings.get('response_format', 'mp3'))
+            
+        self.logger.debug(f"已加载配置: {self.config.config}")
 
     def save_config(self):
+        """保存配置"""
         self.logger.info("保存配置文件...")
         config = {
             'api_key': self.api_key,
@@ -596,13 +570,6 @@ class TextToSpeechApp(QMainWindow):
             'output_directory': self.output_directory,
             'model_settings': {}
         }
-        # 更新API设置
-        config['api_key'] = self.api_key
-        config['api_url'] = self.api_url
-
-        # 确保model_settings存在
-        if 'model_settings' not in config:
-            config['model_settings'] = {}
 
         # 更新当前模型的设置
         selected_model = self.model_combo.currentData()
@@ -614,17 +581,16 @@ class TextToSpeechApp(QMainWindow):
             'response_format': self.format_combo.currentText()
         }
         
-        # 保存配置
-        os.makedirs('data', exist_ok=True)
-        with open(self.config_file, 'w') as f:
-            json.dump(config, f, ensure_ascii=False, indent=4)
+        # 使用 ConfigManager 保存配置
+        self.config.config = config
+        self.config.save()
         self.logger.debug(f"已保存配置: {config}")
 
     def open_settings(self):
         dialog = SettingsDialog(self.api_key, self.api_url)
         if dialog.exec() == QDialog.DialogCode.Accepted:
             self.api_key, self.api_url = dialog.get_settings()
-            self.client = SiliconFlowClient(self.api_key, self.api_url)
+            self.tts_service = TTSService(self.api_key, self.api_url)
             self.save_config()  # 保存配置文件
         
     def upload_voice(self):
@@ -650,7 +616,7 @@ class TextToSpeechApp(QMainWindow):
                 # 使用model的实际值而不是显示名称
                 actual_model = self.model_display_to_actual.get(model, model)  # 获取映射后的模型值
                 
-                response = self.client.upload_voice(
+                response = self.tts_service.upload_voice(
                     audio=audio_content,
                     model=actual_model,
                     customName=name,
@@ -683,15 +649,15 @@ class TextToSpeechApp(QMainWindow):
         event.accept()
 
     def on_model_changed(self):
-        if self.client:  # 只在客户端已初始化时加载音色列表
+        if self.tts_service:  # 只在客户端已初始化时加载音色列表
             self.load_voice_list()
 
     def load_custom_voice_list(self):
-        if not self.client:
+        if not self.tts_service:
             return
         try:
             self.custom_voice_list.clear()  # 清空现有列表
-            voices = self.client.get_voice_list().get('result', [])
+            voices = self.tts_service.get_voices(self.model_combo.currentText())
             for voice in voices:
                 voice_name = voice.get('customName', '未命名')
                 voice_id = voice.get('uri')
@@ -720,7 +686,7 @@ class TextToSpeechApp(QMainWindow):
             print(f"尝试删除音色: {voice_id}")
             
             # 调用 API 删除音色
-            response = self.client.delete_voice(voice_id)
+            response = self.tts_service.delete_voice(voice_id)
             QMessageBox.information(self, '成功', '音色删除成功!')
             self.load_custom_voice_list()  # 重新加载音色列表
         except Exception as e:
@@ -739,7 +705,7 @@ class TextToSpeechApp(QMainWindow):
         custom_voice_list_widget = QListWidget()
 
         # 创建并启动线程
-        self.load_voice_thread = LoadVoiceListThread(self.client)
+        self.load_voice_thread = LoadVoiceListThread(self.tts_service)
         self.load_voice_thread.finished.connect(lambda voices: self.populate_voice_list(custom_voice_list_widget, voices))
         self.load_voice_thread.start()
 

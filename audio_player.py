@@ -2,11 +2,11 @@ import pygame
 import os
 from typing import Optional, Callable
 from PyQt6.QtCore import QTimer
-from utils import logger
+from utils.logger import get_child_logger
 
 class AudioPlayer:
     def __init__(self):
-        self.logger = logger.getChild('player')
+        self.logger = get_child_logger('player')
         self.logger.info("初始化音频播放器...")
         pygame.mixer.init()
         self.current_audio: Optional[str] = None

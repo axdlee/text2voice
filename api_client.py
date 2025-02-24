@@ -2,7 +2,7 @@ import requests
 import json
 import os
 from typing import Optional, Dict, Any
-from utils.logger import logger
+from utils.logger import get_child_logger
 
 class SiliconFlowClient:
     DEFAULT_MODEL = "FunAudioLLM/CosyVoice2-0.5B"
@@ -62,7 +62,7 @@ class SiliconFlowClient:
         self.headers = {
             "Authorization": f"Bearer {api_key}"
         }
-        self.logger = logger.getChild('api')
+        self.logger = get_child_logger('api')
         self.logger.info("初始化 API 客户端...")
         self.logger.debug(f"API Base URL: {self.base_url}")
         # 隐藏 API Key 的大部分内容
