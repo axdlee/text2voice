@@ -27,11 +27,29 @@ class VoiceListDialog(QDialog):
         self.voice_table.setHorizontalHeaderLabels(["模型", "音色名称", "操作"])
         
         # 设置表格样式
-        self.voice_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
-        self.voice_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
-        self.voice_table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)
+        header = self.voice_table.horizontalHeader()
+        # 设置"模型"列宽为200像素
+        header.setSectionResizeMode(0, QHeaderView.ResizeMode.Fixed)
+        self.voice_table.setColumnWidth(0, 200)
+        
+        # 设置"音色名称"列宽为150像素
+        header.setSectionResizeMode(1, QHeaderView.ResizeMode.Fixed)
+        self.voice_table.setColumnWidth(1, 150)
+        
+        # "操作"列自适应
+        header.setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch)
+        
+        # 设置行号宽度为40像素
+        self.voice_table.verticalHeader().setDefaultSectionSize(40)  # 设置行高
+        self.voice_table.verticalHeader().setFixedWidth(40)  # 设置行号宽度
+        
+        # 设置表格其他样式
         self.voice_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         self.voice_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+        self.voice_table.setAlternatingRowColors(True)  # 设置隔行变色
+        
+        # 设置表格边距
+        self.voice_table.setContentsMargins(10, 10, 10, 10)
         
         layout.addWidget(self.voice_table)
         
