@@ -137,7 +137,7 @@ pip install pyinstaller
 
 2. 构建可执行文件:
 ```bash
-pyinstaller --noconsole --add-data ".env;." --add-data "assets;assets" --icon "assets/icon.ico" --name "Text2Voice" main.py
+pyinstaller --noconsole --add-data ".env;." --add-data "assets/*;assets" --icon "assets/icon.ico" --name "Text2Voice" main.py
 ```
 
 3. 构建结果位于 `dist/Text2Voice` 目录下
@@ -152,7 +152,7 @@ brew install create-dmg  # 如果需要创建 DMG 安装包
 
 2. 构建应用程序:
 ```bash
-pyinstaller --noconsole --add-data ".env:." --add-data "assets:assets" --icon "assets/icon.icns" --name "Text2Voice" main.py
+pyinstaller --noconsole --add-data ".env:." --add-data "assets/*:assets" --icon "assets/icon.icns" --name "Text2Voice" main.py
 ```
 
 3. 创建 DMG 安装包 (可选):
@@ -180,7 +180,7 @@ pip install pyinstaller
 
 2. 构建可执行文件:
 ```bash
-pyinstaller --noconsole --add-data ".env:." --add-data "assets:assets" --icon "assets/icon.png" --name "Text2Voice" main.py
+pyinstaller --noconsole --add-data ".env:." --add-data "assets/*:assets" --icon "assets/icon.png" --name "Text2Voice" main.py
 ```
 
 3. 创建 .desktop 文件 (可选):
@@ -226,4 +226,20 @@ EOL
    - 资源文件
    - 配置文件
    - 使用说明
-   - 许可证文件 
+   - 许可证文件
+
+## 📁 项目结构
+
+```
+text2voice/
+├── assets/                # 资源文件目录
+│   ├── icon.ico          # Windows 图标
+│   ├── icon.icns         # macOS 图标
+│   └── icon.png          # Linux 图标和源文件
+├── temp/                 # 临时音频文件目录
+├── main.py              # 主程序
+├── api_client.py        # API 客户端
+├── audio_player.py      # 音频播放器
+├── requirements.txt     # 依赖清单
+├── .env                 # 环境配置
+└── README.md           # 项目说明 
