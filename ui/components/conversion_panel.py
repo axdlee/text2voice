@@ -27,8 +27,11 @@ class ConversionPanel(QWidget):
         self.parent = parent
         
         self._init_ui()
-        # 初始化后刷新音色列表
-        self.refresh_voices()
+        
+        # 获取当前选中的模型
+        current_model = self.model_combo.currentData()
+        # 初始化后刷新音色列表，传入当前模型
+        self.refresh_voices(current_model)
         
     def _init_ui(self):
         """初始化UI"""
@@ -132,8 +135,11 @@ class ConversionPanel(QWidget):
         if default_rate:
             self.sample_rate_combo.setCurrentText(str(default_rate))
 
-    def refresh_voices(self):
-        """刷新音色列表"""
+    def refresh_voices(self, model: str = None):
+        """刷新音色列表
+        Args:
+            model: 指定模型，如果为None则获取所有音色
+        """
         try:
             if not self.parent.core.tts_service:
                 return
@@ -142,17 +148,23 @@ class ConversionPanel(QWidget):
             self.voice_combo.clear()
             
             # 获取音色列表
-            voices = self.parent.core.tts_service.get_voices()
+            voices = self.parent.core.tts_service.get_voices(model)
             
-            # 添加音色选项
-            for voice in voices:
-                # 根据实际返回的数据结构调整
+            # 先添加默认音色
+            if model:
+                default_voices = SiliconFlowClient.DEFAULT_VOICES.get(model, [])
+                for voice in default_voices:
+                    name = voice.split(':')[-1]  # 获取音色名称
+                    self.voice_combo.addItem(f"默认音色: {name}", voice)
+            
+            # 再添加自定义音色
+            for voice in voices.get('result', []):
                 if isinstance(voice, dict):
                     # 如果是字典格式
-                    self.voice_combo.addItem(voice['name'], voice['id'])
-                elif isinstance(voice, str):
-                    # 如果是字符串格式
-                    self.voice_combo.addItem(voice, voice)
+                    name = voice.get('customName', '')
+                    uri = voice.get('uri', '')
+                    if name and uri:
+                        self.voice_combo.addItem(f"自定义音色: {name}", uri)
                 else:
                     self.logger.warning(f"未知的音色数据格式: {voice}")
                     
@@ -174,8 +186,7 @@ class ConversionPanel(QWidget):
             self.sample_rate_combo.setEnabled(True)
             self.speed_input.setEnabled(True)
             self.gain_input.setEnabled(True)
-            # 刷新音色列表
-            self.refresh_voices()
+            
         elif model == 'other_model':
             # 其他模型的特定设置
             pass
@@ -186,4 +197,7 @@ class ConversionPanel(QWidget):
             'sample_rate': self.sample_rate_combo.currentText(),
             'speed': self.speed_input.value(),
             'gain': self.gain_input.value()
-        }) 
+        })
+        
+        # 刷新音色列表，传入当前选中的模型
+        self.refresh_voices(model) 

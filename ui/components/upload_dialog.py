@@ -139,6 +139,11 @@ class UploadVoiceDialog(QDialog):
             )
             
             self.parent.show_info(f"音色 {name} 上传成功!")
+            
+            # 刷新主窗口的音色列表
+            if hasattr(self.parent, 'conversion_panel'):
+                self.parent.conversion_panel.refresh_voices(model)
+            
             self.accept()
             
         except Exception as e:
