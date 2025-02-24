@@ -136,18 +136,43 @@ jobs:
           "Text2Voice.dmg" \
           "dist/"
           
-    - name: Upload Artifacts
-      uses: actions/upload-artifact@v4
-      with:
-        name: Text2Voice-${{ matrix.os }}
-        path: dist/Text2Voice*
-        compression-level: 9
-        retention-days: 90
-          
     - name: Create Release
       if: startsWith(github.ref, 'refs/tags/')
       uses: softprops/action-gh-release@v2
       with:
+        name: Release ${{ github.ref_name }}
+        body: |
+          ## Text2Voice Release ${{ github.ref_name }}
+          
+          ### 下载
+          - Windows: [Text2Voice.exe](https://github.com/xdlee110/text2voice/releases/download/${{ github.ref_name }}/Text2Voice-windows-latest.zip)
+          - macOS: [Text2Voice.dmg](https://github.com/xdlee110/text2voice/releases/download/${{ github.ref_name }}/Text2Voice-macos-latest.zip)
+          - Linux: [Text2Voice](https://github.com/xdlee110/text2voice/releases/download/${{ github.ref_name }}/Text2Voice-ubuntu-latest.zip)
+          
+          ### 更新内容
+          - 请在此处添加版本更新说明
+        draft: false
+        prerelease: false
         files: dist/Text2Voice*
       env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} 
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    # 添加一个步骤来压缩构建产物
+    - name: Zip Artifacts
+      run: |
+        cd dist
+        if [ "${{ runner.os }}" == "Windows" ]; then
+          7z a ../Text2Voice-${{ matrix.os }}.zip Text2Voice*
+        else
+          zip -r ../Text2Voice-${{ matrix.os }}.zip Text2Voice*
+        fi
+        cd ..
+
+    # 更新 Upload Artifacts 步骤
+    - name: Upload Artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: Text2Voice-${{ matrix.os }}
+        path: Text2Voice-${{ matrix.os }}.zip
+        compression-level: 9
+        retention-days: 365 

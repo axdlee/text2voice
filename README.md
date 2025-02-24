@@ -1,6 +1,6 @@
 # 文本转语音工具 (Text-to-Speech Tool)
 
-![Build Status](https://github.com/[your-username]/text2voice/workflows/Build%20Application/badge.svg)
+![Build Status](https://github.com/xdlee110/text2voice/workflows/Build%20Application/badge.svg)
 
 这是一个基于硅基流动 API 的文本转语音转换工具，提供了简洁直观的图形用户界面，支持实时文本转语音和音频播放控制。
 
@@ -29,6 +29,13 @@
 - 网络连接（用于API调用）
 
 ## 🚀 快速开始
+
+### 下载
+
+您可以从以下位置下载最新版本：
+
+1. [Releases 页面](https://github.com/xdlee110/text2voice/releases) - 稳定版本
+2. [Actions 页面](https://github.com/xdlee110/text2voice/actions) - 最新构建版本
 
 ### 安装
 
