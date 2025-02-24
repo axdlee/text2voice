@@ -143,6 +143,41 @@ jobs:
           "Text2Voice.dmg" \
           "dist/"
           
+    - name: Zip Artifacts
+      shell: bash
+      run: |
+        echo "Creating zip archive..."
+        cd dist
+        if [ "${{ runner.os }}" == "Windows" ]; then
+          7z a ../Text2Voice-${{ runner.os }}.zip ./*
+        elif [ "${{ runner.os }}" == "macOS" ]; then
+          zip -r ../Text2Voice-${{ runner.os }}.zip ./*
+        else
+          zip -r ../Text2Voice-${{ runner.os }}.zip ./*
+        fi
+        cd ..
+        # 重命名文件以匹配下载链接
+        if [ "${{ runner.os }}" == "Windows" ]; then
+          mv Text2Voice-Windows.zip Text2Voice-windows-latest.zip
+        elif [ "${{ runner.os }}" == "macOS" ]; then
+          mv Text2Voice-macOS.zip Text2Voice-macos-latest.zip
+        else
+          mv Text2Voice-Linux.zip Text2Voice-ubuntu-latest.zip
+        fi
+        ls -la Text2Voice-*.zip
+        echo "Zip files created:"
+        for f in Text2Voice-*.zip; do
+          echo "- $f ($(stat -f%z "$f" 2>/dev/null || stat -c%s "$f") bytes)"
+        done
+
+    - name: Upload Artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: Text2Voice-${{ matrix.os }}
+        path: Text2Voice-${{ matrix.os }}.zip
+        compression-level: 9
+        retention-days: 365
+
     - name: Create Release
       if: startsWith(github.ref, 'refs/tags/')
       uses: softprops/action-gh-release@v2
@@ -168,33 +203,6 @@ jobs:
           ![下载次数](https://img.shields.io/github/downloads/axdlee/text2voice/${{ github.ref_name }}/total)
         draft: false
         prerelease: false
-        files: |
-          Text2Voice-*.zip
+        files: Text2Voice-*-latest.zip  # 更新文件匹配模式
       env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-    # 确保压缩步骤在 release 之前执行
-    - name: Zip Artifacts
-      shell: bash
-      run: |
-        echo "Creating zip archive..."
-        cd dist
-        if [ "${{ runner.os }}" == "Windows" ]; then
-          7z a ../Text2Voice-${{ matrix.os }}.zip ./*
-        else
-          zip -r ../Text2Voice-${{ matrix.os }}.zip ./*
-        fi
-        cd ..
-        ls -la Text2Voice-*.zip
-        echo "Zip files created:"
-        for f in Text2Voice-*.zip; do
-          echo "- $f ($(stat -f%z "$f" 2>/dev/null || stat -c%s "$f") bytes)"
-        done
-
-    - name: Upload Artifacts
-      uses: actions/upload-artifact@v4
-      with:
-        name: Text2Voice-${{ matrix.os }}
-        path: Text2Voice-${{ matrix.os }}.zip
-        compression-level: 9
-        retention-days: 365 
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} 

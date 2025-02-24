@@ -37,8 +37,8 @@
 
 您可以从以下位置下载最新版本：
 
-1. [Releases 页面](https://github.com/xdlee110/text2voice/releases) - 稳定版本
-2. [Actions 页面](https://github.com/xdlee110/text2voice/actions) - 最新构建版本
+1. [Releases 页面](https://github.com/axdlee/text2voice/releases) - 稳定版本
+2. [Actions 页面](https://github.com/axdlee/text2voice/actions) - 最新构建版本
 
 ### 安装
 
