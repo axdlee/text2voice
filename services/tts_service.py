@@ -49,13 +49,18 @@ class TTSService:
         self.logger.info(f"删除音色: {voice_id}")
         return self.client.delete_voice(voice_id)
         
-    def upload_voice(self, audio: str, model: str, 
-                    customName: str, text: str) -> Dict[str, Any]:
-        """上传自定义音色"""
-        self.logger.info(f"上传音色: {customName}")
+    def upload_voice(self, voice_name: str, model: str, audio_data: bytes, text: str):
+        """上传自定义音色
+        Args:
+            voice_name: 音色名称
+            model: 模型ID
+            audio_data: 音频数据
+            text: 音频对应的文本内容
+        """
+        self.logger.info(f"上传音色: {voice_name}")
         return self.client.upload_voice(
-            audio=audio,
+            voice_name=voice_name,
             model=model,
-            customName=customName,
+            audio_data=audio_data,
             text=text
         ) 

@@ -1,4 +1,4 @@
-from PyQt6.QtWidgets import QDialog
+from PyQt6.QtWidgets import QDialog, QFileDialog
 from ui.base.main_window import BaseMainWindow
 from ui.components.settings_dialog import SettingsDialog
 from ui.components.voice_list_dialog import VoiceListDialog
@@ -14,6 +14,28 @@ class MainWindow(BaseMainWindow):
         super().__init__()
         self.logger.info("初始化主窗口...")
         self.init_ui()
+        
+    def select_output_directory(self):
+        """选择输出目录"""
+        directory = QFileDialog.getExistingDirectory(
+            self,
+            "选择输出目录",
+            self.core.get_config('output_dir', '')
+        )
+        if directory:
+            self.core.save_config({'output_dir': directory})
+            self.status_bar.show_message(f"已设置输出目录: {directory}", 3000)
+        
+    def on_model_changed(self, index):
+        """模型变更回调"""
+        model = self.conversion_panel.model_combo.currentData()
+        self.logger.info(f"切换模型: {model}")
+        
+        # 更新相关UI状态
+        self.conversion_panel.update_model_settings(model)
+        
+        # 保存当前选择
+        self.core.save_config({'last_model': model})
         
     def convert_text(self):
         """转换文本"""
@@ -52,14 +74,20 @@ class MainWindow(BaseMainWindow):
     def _on_conversion_finished(self, result):
         """转换完成回调"""
         try:
+            # 获取输出目录
+            output_dir = self.core.get_config('output_dir', 'output')
+            
+            # 生成文件名 (使用前20个字符作为文件名)
+            text = self.conversion_panel.text_input.toPlainText()[:20]
+            filename = f"{text}_{int(time.time())}.{self.conversion_panel.format_combo.currentText()}"
+            
             # 保存音频文件
-            filename = f"output_{int(time.time())}.{self.conversion_panel.format_combo.currentText()}"
-            filepath = self.core.audio_mgr.save_audio(result, filename)
+            filepath = self.core.audio_mgr.save_audio(result, filename, output_dir)
             
             # 播放音频
             self.core.audio_mgr.play(filepath)
             
-            self.status_bar.show_message("转换完成", 5000)
+            self.status_bar.show_message(f"转换完成: {filename}", 5000)
             self.status_bar.show_progress(False)
             
         except Exception as e:
@@ -93,4 +121,15 @@ class MainWindow(BaseMainWindow):
             return
             
         dialog = VoiceListDialog(self, self.core.tts_service)
-        dialog.exec() 
+        dialog.exec()
+
+    def upload_voice(self):
+        """上传自定义音色"""
+        if not self.core.tts_service:
+            self.show_error("请先设置API密钥!")
+            return
+            
+        dialog = UploadVoiceDialog(self, self.core.tts_service)
+        if dialog.exec() == QDialog.DialogCode.Accepted:
+            # 刷新音色列表
+            self.conversion_panel.refresh_voices() 

@@ -133,6 +133,9 @@ class SiliconFlowClient(BaseTTSClient):
         try:
             url = f"{self.base_url}/uploads/audio/voice"
             self.logger.info(f"上传音色: {custom_name}")
+
+            if model not in self.AVAILABLE_MODELS:
+                raise ValueError(f"模型 {model} 不存在")
             
             files = {
                 'audio': (None, audio),

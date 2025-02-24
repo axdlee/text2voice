@@ -4,15 +4,15 @@ from ui.managers.core_manager import CoreManager
 from ui.components.toolbar import MainToolBar
 from ui.components.status_bar import MainStatusBar
 from ui.components.conversion_panel import ConversionPanel
+import logging
 
 class BaseMainWindow(QMainWindow):
     """主窗口基类"""
     def __init__(self):
         super().__init__()
-        self.logger = get_child_logger('main_window')
-        
-        # 初始化核心管理器
-        self.core = CoreManager()
+        # 确保这些实例只创建一次
+        self.core = CoreManager()  # 使用单例模式
+        self.logger = logging.getLogger(__name__)
         
         # 初始化UI组件
         self.toolbar = None
