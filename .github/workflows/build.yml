@@ -78,14 +78,19 @@ jobs:
         
         # 安装系统依赖
         brew install qt6
+        brew install create-dmg
         
-        # 设置环境变量
+        # 设置 Qt 环境变量
         echo "PYTHONPATH=${GITHUB_WORKSPACE}" >> $GITHUB_ENV
         echo "QT_PLUGIN_PATH=$BREW_PREFIX/opt/qt6/plugins" >> $GITHUB_ENV
+        echo "QT_QPA_PLATFORM_PATH=$BREW_PREFIX/opt/qt6/plugins/platforms" >> $GITHUB_ENV
+        echo "QT_LIBRARY_PATH=$BREW_PREFIX/opt/qt6/lib" >> $GITHUB_ENV
         echo "QT_DEBUG_PLUGINS=1" >> $GITHUB_ENV
         
         # 显示 Qt 安装信息
         brew list qt6 --verbose
+        ls -la $BREW_PREFIX/opt/qt6/plugins
+        ls -la $BREW_PREFIX/opt/qt6/plugins/platforms
         
         echo "Installed packages:"
         pip list
@@ -115,11 +120,18 @@ jobs:
     - name: Build (macOS ARM)
       if: runner.os == 'macOS'
       run: |
+        # 添加 Qt 相关配置到 spec 文件
+        echo "import os" > Text2Voice.spec
+        echo "qt_plugin_path = '/opt/homebrew/opt/qt6/plugins'" >> Text2Voice.spec
+        echo "qt_lib_path = '/opt/homebrew/opt/qt6/lib'" >> Text2Voice.spec
+        
         pyinstaller --noconsole \
           --add-data ".env:." \
           --add-data "assets:assets" \
           --add-data "resources:resources" \
           --add-data "ui/styles:ui/styles" \
+          --add-binary "/opt/homebrew/opt/qt6/plugins/platforms/libqcocoa.dylib:PyQt6/Qt6/plugins/platforms/" \
+          --add-binary "/opt/homebrew/opt/qt6/plugins/styles/libqmacstyle.dylib:PyQt6/Qt6/plugins/styles/" \
           --name "Text2Voice-ARM" \
           --hidden-import PyQt6.QtCore \
           --hidden-import PyQt6.QtGui \
@@ -130,12 +142,26 @@ jobs:
           --hidden-import pygame \
           main.py
 
+        # 验证构建结果
+        otool -L "dist/Text2Voice-ARM.app/Contents/MacOS/Text2Voice-ARM"
+        ls -R "dist/Text2Voice-ARM.app/Contents/Frameworks/"
+        ls -R "dist/Text2Voice-ARM.app/Contents/PlugIns/"
+
     # 创建 DMG (macOS ARM)
     - name: Create DMG (macOS ARM)
       if: runner.os == 'macOS'
       run: |
-        brew install create-dmg
+        # 确保应用程序可执行
         chmod +x "dist/Text2Voice-ARM.app/Contents/MacOS/Text2Voice-ARM"
+        
+        # 复制额外的 Qt 插件
+        mkdir -p "dist/Text2Voice-ARM.app/Contents/PlugIns/platforms"
+        mkdir -p "dist/Text2Voice-ARM.app/Contents/PlugIns/styles"
+        cp -f "/opt/homebrew/opt/qt6/plugins/platforms/libqcocoa.dylib" "dist/Text2Voice-ARM.app/Contents/PlugIns/platforms/"
+        cp -f "/opt/homebrew/opt/qt6/plugins/styles/libqmacstyle.dylib" "dist/Text2Voice-ARM.app/Contents/PlugIns/styles/"
+        
+        # 使用 macdeployqt 处理 Qt 依赖
+        /opt/homebrew/opt/qt6/bin/macdeployqt "dist/Text2Voice-ARM.app" -verbose=3
         
         create-dmg \
           --volname "Text2Voice" \
