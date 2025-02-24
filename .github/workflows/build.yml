@@ -77,20 +77,27 @@ jobs:
         echo "Using Homebrew at: $BREW_PREFIX"
         
         # 安装系统依赖
-        brew install qt6
+        brew install qt@6
         brew install create-dmg
+        
+        # 获取 Qt 实际安装路径
+        QT_PATH=$(brew --prefix qt)
+        echo "Qt installed at: $QT_PATH"
         
         # 设置 Qt 环境变量
         echo "PYTHONPATH=${GITHUB_WORKSPACE}" >> $GITHUB_ENV
-        echo "QT_PLUGIN_PATH=$BREW_PREFIX/opt/qt6/plugins" >> $GITHUB_ENV
-        echo "QT_QPA_PLATFORM_PATH=$BREW_PREFIX/opt/qt6/plugins/platforms" >> $GITHUB_ENV
-        echo "QT_LIBRARY_PATH=$BREW_PREFIX/opt/qt6/lib" >> $GITHUB_ENV
+        echo "QT_PLUGIN_PATH=$QT_PATH/share/qt/plugins" >> $GITHUB_ENV
+        echo "QT_QPA_PLATFORM_PATH=$QT_PATH/share/qt/plugins/platforms" >> $GITHUB_ENV
+        echo "QT_LIBRARY_PATH=$QT_PATH/lib" >> $GITHUB_ENV
+        echo "QT_TRANSLATIONS_PATH=$QT_PATH/share/qt/translations" >> $GITHUB_ENV
         echo "QT_DEBUG_PLUGINS=1" >> $GITHUB_ENV
         
         # 显示 Qt 安装信息
-        brew list qt6 --verbose
-        ls -la $BREW_PREFIX/opt/qt6/plugins
-        ls -la $BREW_PREFIX/opt/qt6/plugins/platforms
+        brew list qt --verbose
+        echo "Checking Qt directories:"
+        ls -la "$QT_PATH/share/qt/plugins" || true
+        ls -la "$QT_PATH/share/qt/plugins/platforms" || true
+        ls -la "$QT_PATH/lib" || true
         
         echo "Installed packages:"
         pip list
@@ -120,18 +127,22 @@ jobs:
     - name: Build (macOS ARM)
       if: runner.os == 'macOS'
       run: |
+        # 获取 Qt 路径
+        QT_PATH=$(brew --prefix qt)
+        
         # 添加 Qt 相关配置到 spec 文件
         echo "import os" > Text2Voice.spec
-        echo "qt_plugin_path = '/opt/homebrew/opt/qt6/plugins'" >> Text2Voice.spec
-        echo "qt_lib_path = '/opt/homebrew/opt/qt6/lib'" >> Text2Voice.spec
+        echo "qt_plugin_path = '$QT_PATH/share/qt/plugins'" >> Text2Voice.spec
+        echo "qt_lib_path = '$QT_PATH/lib'" >> Text2Voice.spec
         
         pyinstaller --noconsole \
           --add-data ".env:." \
           --add-data "assets:assets" \
           --add-data "resources:resources" \
           --add-data "ui/styles:ui/styles" \
-          --add-binary "/opt/homebrew/opt/qt6/plugins/platforms/libqcocoa.dylib:PyQt6/Qt6/plugins/platforms/" \
-          --add-binary "/opt/homebrew/opt/qt6/plugins/styles/libqmacstyle.dylib:PyQt6/Qt6/plugins/styles/" \
+          --add-binary "$QT_PATH/share/qt/plugins/platforms/libqcocoa.dylib:PyQt6/Qt6/plugins/platforms/" \
+          --add-binary "$QT_PATH/share/qt/plugins/styles/libqmacstyle.dylib:PyQt6/Qt6/plugins/styles/" \
+          --add-data "$QT_PATH/share/qt/translations:PyQt6/Qt6/translations" \
           --name "Text2Voice-ARM" \
           --hidden-import PyQt6.QtCore \
           --hidden-import PyQt6.QtGui \
@@ -143,25 +154,32 @@ jobs:
           main.py
 
         # 验证构建结果
+        echo "Checking build artifacts:"
         otool -L "dist/Text2Voice-ARM.app/Contents/MacOS/Text2Voice-ARM"
-        ls -R "dist/Text2Voice-ARM.app/Contents/Frameworks/"
-        ls -R "dist/Text2Voice-ARM.app/Contents/PlugIns/"
+        ls -R "dist/Text2Voice-ARM.app/Contents/Frameworks/" || true
+        ls -R "dist/Text2Voice-ARM.app/Contents/PlugIns/" || true
 
     # 创建 DMG (macOS ARM)
     - name: Create DMG (macOS ARM)
       if: runner.os == 'macOS'
       run: |
+        QT_PATH=$(brew --prefix qt)
+        
         # 确保应用程序可执行
         chmod +x "dist/Text2Voice-ARM.app/Contents/MacOS/Text2Voice-ARM"
         
         # 复制额外的 Qt 插件
         mkdir -p "dist/Text2Voice-ARM.app/Contents/PlugIns/platforms"
         mkdir -p "dist/Text2Voice-ARM.app/Contents/PlugIns/styles"
-        cp -f "/opt/homebrew/opt/qt6/plugins/platforms/libqcocoa.dylib" "dist/Text2Voice-ARM.app/Contents/PlugIns/platforms/"
-        cp -f "/opt/homebrew/opt/qt6/plugins/styles/libqmacstyle.dylib" "dist/Text2Voice-ARM.app/Contents/PlugIns/styles/"
+        cp -f "$QT_PATH/share/qt/plugins/platforms/libqcocoa.dylib" "dist/Text2Voice-ARM.app/Contents/PlugIns/platforms/" || true
+        cp -f "$QT_PATH/share/qt/plugins/styles/libqmacstyle.dylib" "dist/Text2Voice-ARM.app/Contents/PlugIns/styles/" || true
+        
+        # 复制翻译文件
+        mkdir -p "dist/Text2Voice-ARM.app/Contents/translations"
+        cp -f "$QT_PATH/share/qt/translations/"*.qm "dist/Text2Voice-ARM.app/Contents/translations/" || true
         
         # 使用 macdeployqt 处理 Qt 依赖
-        /opt/homebrew/opt/qt6/bin/macdeployqt "dist/Text2Voice-ARM.app" -verbose=3
+        "$QT_PATH/bin/macdeployqt" "dist/Text2Voice-ARM.app" -verbose=3 || true
         
         create-dmg \
           --volname "Text2Voice" \
