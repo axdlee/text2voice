@@ -22,7 +22,7 @@ jobs:
       fail-fast: false  # 一个平台失败不影响其他平台
       matrix:
         os: [windows-latest, macos-latest]
-        python-version: ['3.8']
+        python-version: ['3.12']  # 更新到 Python 3.12
 
     steps:
     - name: Checkout code
@@ -92,15 +92,17 @@ jobs:
         echo "LDFLAGS=-L/usr/local/opt/gettext/lib" >> $GITHUB_ENV
         echo "CPPFLAGS=-I/usr/local/opt/gettext/include" >> $GITHUB_ENV
         
-        # 强制使用 x86_64 架构重新安装 pygame
-        echo "Installing pygame..."
-        ARCHFLAGS="-arch x86_64" pip install --force-reinstall pygame
+        # 安装 Python 依赖
+        echo "Installing Python dependencies..."
+        python -m pip install --upgrade pip setuptools wheel
         
-        # 安装 PyQt6 依赖
-        echo "Installing PyQt6 dependencies..."
-        python -m pip install --upgrade pip
-        python -m pip install PyQt6-Qt6
-        python -m pip install PyQt6-sip
+        # 安装 PyQt6
+        python -m pip install PyQt6>=6.4.2
+        python -m pip install PyQt6-Qt6>=6.4.2
+        python -m pip install PyQt6-sip>=13.4.1
+        
+        # 安装 pygame
+        python -m pip install pygame>=2.5.2
         
         echo "Installed packages:"
         pip list
@@ -147,6 +149,8 @@ jobs:
         --hidden-import PyQt6.QtWidgets ^
         --hidden-import qt_material ^
         --hidden-import ui.styles ^
+        --hidden-import PyQt6.sip ^
+        --hidden-import pygame ^
         main.py
 
     # macOS 构建
@@ -179,6 +183,8 @@ jobs:
           --hidden-import PyQt6.QtWidgets \
           --hidden-import qt_material \
           --hidden-import ui.styles \
+          --hidden-import PyQt6.sip \
+          --hidden-import pygame \
           main.py
 
     # 创建 DMG (macOS)

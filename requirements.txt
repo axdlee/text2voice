@@ -1,8 +1,8 @@
-PyQt6==6.4.2
-PyQt6-Qt6==6.4.2
-PyQt6-sip==13.4.1
-pygame==2.5.2
-requests==2.31.0
-python-dotenv==1.0.0
-qt-material==2.14 
+PyQt6>=6.4.2,<7.0.0
+PyQt6-Qt6>=6.4.2,<7.0.0
+PyQt6-sip>=13.4.1,<14.0.0
+pygame>=2.5.2,<3.0.0
+requests>=2.31.0,<3.0.0
+python-dotenv>=1.0.0,<2.0.0
+qt-material>=2.14,<3.0.0 
     
