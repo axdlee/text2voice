@@ -7,6 +7,13 @@ on:
   pull_request:
     branches: [ main ]
 
+# 更新权限配置
+permissions:
+  contents: write
+  discussions: write
+  pull-requests: write
+  issues: write
+
 jobs:
   build:
     name: Build on ${{ matrix.os }}
@@ -145,30 +152,32 @@ jobs:
           ## Text2Voice Release ${{ github.ref_name }}
           
           ### 下载
-          - Windows: [Text2Voice.exe](https://github.com/xdlee110/text2voice/releases/download/${{ github.ref_name }}/Text2Voice-windows-latest.zip)
-          - macOS: [Text2Voice.dmg](https://github.com/xdlee110/text2voice/releases/download/${{ github.ref_name }}/Text2Voice-macos-latest.zip)
-          - Linux: [Text2Voice](https://github.com/xdlee110/text2voice/releases/download/${{ github.ref_name }}/Text2Voice-ubuntu-latest.zip)
+          - Windows: [Text2Voice-windows-latest.zip](Text2Voice-windows-latest.zip)
+          - macOS: [Text2Voice-macos-latest.zip](Text2Voice-macos-latest.zip)
+          - Linux: [Text2Voice-ubuntu-latest.zip](Text2Voice-ubuntu-latest.zip)
           
           ### 更新内容
           - 请在此处添加版本更新说明
         draft: false
         prerelease: false
-        files: dist/Text2Voice*
+        files: Text2Voice-*.zip  # 简化文件匹配模式
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-    # 添加一个步骤来压缩构建产物
+    # 确保压缩步骤在 release 之前执行
     - name: Zip Artifacts
+      shell: bash
       run: |
+        echo "Creating zip archive..."
         cd dist
         if [ "${{ runner.os }}" == "Windows" ]; then
-          7z a ../Text2Voice-${{ matrix.os }}.zip Text2Voice*
+          7z a ../Text2Voice-${{ matrix.os }}.zip ./*
         else
-          zip -r ../Text2Voice-${{ matrix.os }}.zip Text2Voice*
+          zip -r ../Text2Voice-${{ matrix.os }}.zip ./*
         fi
         cd ..
+        ls -la Text2Voice-*.zip
 
-    # 更新 Upload Artifacts 步骤
     - name: Upload Artifacts
       uses: actions/upload-artifact@v4
       with:
