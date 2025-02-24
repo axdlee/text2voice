@@ -138,35 +138,41 @@ class ConversionPanel(QWidget):
     def refresh_voices(self, model: str = None):
         """刷新音色列表
         Args:
-            model: 指定模型，如果为None则获取所有音色
+            model: 指定模型，如果为None则获取当前选中的模型
         """
         try:
             if not self.parent.core.tts_service:
                 return
                 
+            # 如果没有传入模型，则使用当前选中的模型
+            if model is None:
+                model = self.model_combo.currentData()
+            
+            self.logger.debug(f"刷新音色列表，当前模型: {model}")
+            
             # 清空当前列表
             self.voice_combo.clear()
             
-            # 获取音色列表
+            # 先添加默认音色
+            default_voices = SiliconFlowClient.DEFAULT_VOICES.get(model, [])
+            for voice in default_voices:
+                name = voice.split(':')[-1]  # 获取音色名称
+                self.voice_combo.addItem(f"默认音色: {name}", voice)
+                self.logger.debug(f"添加默认音色: {name} -> {voice}")
+            
+            # 获取自定义音色列表
             voices = self.parent.core.tts_service.get_voices(model)
             
-            # 先添加默认音色
-            if model:
-                default_voices = SiliconFlowClient.DEFAULT_VOICES.get(model, [])
-                for voice in default_voices:
-                    name = voice.split(':')[-1]  # 获取音色名称
-                    self.voice_combo.addItem(f"默认音色: {name}", voice)
-            
-            # 再添加自定义音色
+            # 添加自定义音色
             for voice in voices.get('result', []):
                 if isinstance(voice, dict):
-                    # 如果是字典格式
                     name = voice.get('customName', '')
                     uri = voice.get('uri', '')
-                    if name and uri:
+                    voice_model = voice.get('model', '')
+                    # 只添加当前模型的音色
+                    if name and uri and (not model or voice_model == model):
                         self.voice_combo.addItem(f"自定义音色: {name}", uri)
-                else:
-                    self.logger.warning(f"未知的音色数据格式: {voice}")
+                        self.logger.debug(f"添加自定义音色: {name} -> {uri}")
                     
             # 如果有保存的上次选择，则设置为当前选择
             last_voice = self.parent.core.get_config('last_voice')

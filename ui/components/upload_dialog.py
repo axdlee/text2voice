@@ -131,7 +131,7 @@ class UploadVoiceDialog(QDialog):
                 
             # 上传音色
             self.logger.info(f"开始上传音色: {name}")
-            self.tts_service.upload_voice(
+            result = self.tts_service.upload_voice(
                 voice_name=name,
                 model=model,
                 audio_data=audio_data,
@@ -140,9 +140,11 @@ class UploadVoiceDialog(QDialog):
             
             self.parent.show_info(f"音色 {name} 上传成功!")
             
-            # 刷新主窗口的音色列表
+            # 刷新主窗口的音色列表，传入当前选中的模型
             if hasattr(self.parent, 'conversion_panel'):
-                self.parent.conversion_panel.refresh_voices(model)
+                # 获取当前选中的模型
+                current_model = self.model_combo.currentData()
+                self.parent.conversion_panel.refresh_voices(current_model)
             
             self.accept()
             

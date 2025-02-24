@@ -150,7 +150,7 @@ class MainWindow(BaseMainWindow):
             # 刷新音色列表对话框
             voice_list_dialog.refresh_voices()
             
-            # 刷新主窗口的音色列表
+            # 刷新主窗口的音色列表，传入当前模型
             self.conversion_panel.refresh_voices(current_model)
             
             # 显示成功消息
