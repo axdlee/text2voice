@@ -36,16 +36,17 @@ jobs:
       run: |
         sudo apt-get update
         sudo apt-get install -y imagemagick
-        sudo apt-get install -y librsvg2-bin  # 添加 SVG 支持
+        sudo apt-get install -y librsvg2-bin
         # 验证安装
-        magick --version
+        convert --version
+        # 确保 policy.xml 允许 SVG 操作
+        sudo sed -i 's/<policy domain="coder" rights="none" pattern="SVG" \/>/<policy domain="coder" rights="read|write" pattern="SVG" \/>/' /etc/ImageMagick-6/policy.xml
         
     # macOS 系统安装 ImageMagick
     - name: Install ImageMagick (macOS)
       if: runner.os == 'macOS'
       run: |
         brew install imagemagick librsvg
-        # 验证安装
         magick --version
         
     # Windows 系统安装 ImageMagick
@@ -53,19 +54,22 @@ jobs:
       if: runner.os == 'Windows'
       run: |
         choco install imagemagick.app -y
-        # 刷新环境变量
         refreshenv
-        # 验证安装
         magick --version
         
     - name: Generate Icons
       shell: bash
       run: |
         chmod +x assets/create_icons.sh
-        # 显示 ImageMagick 版本和支持的格式
-        magick --version
-        magick -list format
-        # 运行图标生成脚本
+        # 修改脚本中的命令
+        if [ "$RUNNER_OS" == "Linux" ]; then
+          sed -i 's/magick convert/convert/g' assets/create_icons.sh
+          convert --version
+          convert -list format
+        else
+          magick --version
+          magick -list format
+        fi
         ./assets/create_icons.sh
         
     - name: Build (Windows)

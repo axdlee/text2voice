@@ -13,32 +13,34 @@ cat > assets/icon.svg << EOL
 </svg>
 EOL
 
-# 检查是否安装了必要的工具
-command -v magick >/dev/null 2>&1 || { echo "请先安装 ImageMagick"; exit 1; }
+# 检查系统类型并使用相应的命令
+if [ "$(uname)" == "Linux" ]; then
+    CONVERT_CMD="convert"
+else
+    CONVERT_CMD="magick convert"
+fi
 
-# 首先从 SVG 生成 PNG
-magick convert assets/icon.svg assets/icon.png
+# 从 SVG 生成 PNG
+$CONVERT_CMD assets/icon.svg assets/icon.png
 
 # 创建 macOS 图标所需的不同尺寸
 mkdir -p assets/icon.iconset
 sizes=("16" "32" "64" "128" "256" "512")
 for size in "${sizes[@]}"; do
     # 正常分辨率
-    magick convert assets/icon.png -resize ${size}x${size} assets/icon.iconset/icon_${size}x${size}.png
+    $CONVERT_CMD assets/icon.png -resize ${size}x${size} assets/icon.iconset/icon_${size}x${size}.png
     # 高分辨率 (@2x)
-    magick convert assets/icon.png -resize $((size*2))x$((size*2)) assets/icon.iconset/icon_${size}x${size}@2x.png
+    $CONVERT_CMD assets/icon.png -resize $((size*2))x$((size*2)) assets/icon.iconset/icon_${size}x${size}@2x.png
 done
 
 # 为 Windows 创建 ICO 文件
-magick convert assets/icon.png -define icon:auto-resize=256,128,64,48,32,16 assets/icon.ico
+$CONVERT_CMD assets/icon.png -define icon:auto-resize=256,128,64,48,32,16 assets/icon.ico
 
-# 为 macOS 创建 ICNS 文件 (仅在 macOS 上执行)
-if [[ "$OSTYPE" == "darwin"* ]]; then
+# 为 macOS 创建 ICNS 文件
+if [ "$(uname)" == "Darwin" ]; then
     iconutil -c icns assets/icon.iconset -o assets/icon.icns
 else
-    echo "注意: 在非 macOS 系统上跳过 ICNS 文件生成"
-    # 使用 ImageMagick 创建基本的 icns 文件
-    magick convert assets/icon.png assets/icon.icns
+    $CONVERT_CMD assets/icon.png assets/icon.icns
 fi
 
 # 清理临时文件
