@@ -19,21 +19,26 @@ jobs:
     name: Build on ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
     strategy:
+      fail-fast: false  # 一个平台失败不影响其他平台
       matrix:
         os: [windows-latest, macos-latest]
         python-version: ['3.8']
 
     steps:
-    - uses: actions/checkout@v4
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0  # 获取完整的历史记录用于版本信息
     
     - name: Set up Python
       uses: actions/setup-python@v5
       with:
         python-version: ${{ matrix.python-version }}
         architecture: 'x64'  # 强制使用 x64 架构
+        cache: 'pip'  # 启用 pip 缓存
         
     # 创建必要的文件和目录
-    - name: Create necessary files
+    - name: Create necessary files and directories
       shell: bash
       run: |
         # 创建 .env 文件
@@ -42,13 +47,17 @@ jobs:
           echo "SILICON_API_KEY=dummy_key" > .env
         fi
         
-        # 创建目录
-        for dir in "assets" "temp" "logs"; do
+        # 创建必要目录
+        for dir in "assets" "temp" "logs" "resources"; do
           if [ ! -d "$dir" ]; then
             echo "Creating $dir directory..."
             mkdir -p "$dir"
           fi
         done
+        
+        # 显示目录结构
+        echo "Directory structure:"
+        ls -la
         
     - name: Install dependencies
       run: |
@@ -67,11 +76,15 @@ jobs:
         # 安装 PyQt6 依赖
         python -m pip install PyQt6-Qt6
         python -m pip install PyQt6-sip
+        
+        echo "Installed packages:"
+        pip list
 
     - name: Set macOS environment
       if: runner.os == 'macOS'
       run: |
         echo "QT_DEBUG_PLUGINS=1" >> $GITHUB_ENV
+        echo "PYTHONPATH=${GITHUB_WORKSPACE}" >> $GITHUB_ENV
         
     # Windows 构建
     - name: Build (Windows)
@@ -82,37 +95,46 @@ jobs:
         --noconsole ^
         --add-data ".env;." ^
         --add-data "assets/*;assets" ^
+        --add-data "resources/*;resources" ^
+        --add-data "ui/styles/*;ui/styles" ^
         --icon "assets/icon.ico" ^
         --name "Text2Voice" ^
         --hidden-import PyQt6.QtCore ^
         --hidden-import PyQt6.QtGui ^
         --hidden-import PyQt6.QtWidgets ^
+        --hidden-import qt_material ^
+        --hidden-import ui.styles ^
         main.py
 
     # macOS 构建
     - name: Build (macOS)
       if: runner.os == 'macOS'
       run: |
-        # Intel Mac 构建
         pyinstaller --noconsole \
           --add-data ".env:." \
           --add-data "assets/*:assets" \
+          --add-data "resources/*:resources" \
+          --add-data "ui/styles/*:ui/styles" \
           --icon "assets/icon.icns" \
           --name "Text2Voice-Intel" \
           --hidden-import PyQt6.QtCore \
           --hidden-import PyQt6.QtGui \
           --hidden-import PyQt6.QtWidgets \
+          --hidden-import qt_material \
+          --hidden-import ui.styles \
           main.py
 
     # 创建 DMG (macOS)
     - name: Create DMG (macOS)
       if: runner.os == 'macOS'
       run: |
-        brew install create-dmg
+        brew install create-dmg || exit 1
         
+        # 确保执行权限
         chmod +x "dist/Text2Voice-Intel.app/Contents/MacOS/Text2Voice-Intel"
         
-        create-dmg \
+        # 添加错误处理
+        if ! create-dmg \
           --volname "Text2Voice" \
           --window-pos 200 120 \
           --window-size 800 400 \
@@ -121,19 +143,31 @@ jobs:
           --hide-extension "Text2Voice-Intel.app" \
           --app-drop-link 600 185 \
           "Text2Voice-Intel.dmg" \
-          "dist/"
+          "dist/"; then
+          echo "DMG creation failed"
+          exit 1
+        fi
 
     # 打包制品
     - name: Zip Artifacts
       shell: bash
       run: |
-        cd dist
+        echo "Creating zip archives..."
+        cd dist || exit 1
+        
         if [ "${{ runner.os }}" == "Windows" ]; then
-          7z a ../Text2Voice-windows-latest.zip ./*
+          7z a ../Text2Voice-windows-latest.zip ./* || exit 1
+          echo "Windows zip created successfully"
         elif [ "${{ runner.os }}" == "macOS" ]; then
-          zip -r ../Text2Voice-macos-intel-latest.zip ./*
+          zip -r ../Text2Voice-macos-intel-latest.zip ./* || exit 1
+          echo "macOS zip created successfully"
         fi
+        
         cd ..
+        
+        # 显示创建的文件
+        echo "Created files:"
+        ls -lh Text2Voice-*.zip Text2Voice-*.dmg 2>/dev/null || true
 
     # 上传制品
     - name: Upload Artifacts
@@ -152,9 +186,35 @@ jobs:
       uses: softprops/action-gh-release@v2
       with:
         name: Release ${{ github.ref_name }}
+        body: |
+          ## Text2Voice ${{ github.ref_name }}
+          
+          ### 构建信息
+          - 版本: ${{ github.ref_name }}
+          - 时间: ${{ github.event.head_commit.timestamp }}
+          - 提交: ${{ github.event.head_commit.message }}
+          - 分支: ${{ github.ref_name }}
+          
+          ### 下载
+          - Windows 版本: Text2Voice-windows-latest.zip
+          - macOS Intel 版本: Text2Voice-macos-intel-latest.zip
+          - DMG 安装包: Text2Voice-Intel.dmg
+          
+          ### 更新说明
+          {{ 请在此处添加版本更新说明 }}
+          
         files: |
           Text2Voice-windows-latest.zip
           Text2Voice-macos-intel-latest.zip
           Text2Voice-*.dmg
+        draft: false
+        prerelease: false
       env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} 
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    # 构建完成通知
+    - name: Build Status
+      if: always()
+      run: |
+        echo "Build completed for ${{ runner.os }}"
+        echo "Status: ${{ job.status }}" 
