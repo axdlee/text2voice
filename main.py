@@ -153,8 +153,16 @@ class LoadVoiceListThread(QThread):
 class TextToSpeechApp(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.logger = logger.getChild('ui')
+        self.logger = get_child_logger('ui')
         self.logger.info("初始化用户界面...")
+        
+        # 添加模型显示名称到实际值的映射
+        self.model_display_to_actual = {
+            "CosyVoice2-0.5B (免费)": "FunAudioLLM/CosyVoice2-0.5B",
+            "GPT-SoVITS (免费)": "RVC-Boss/GPT-SoVITS",
+            "Fish-Speech-1.5 (付费)": "fishaudio/fish-speech-1.5",
+            "Fish-Speech-1.4 (付费)": "fishaudio/fish-speech-1.4"
+        }
         
         # 初始化服务
         self.config = ConfigManager()
@@ -595,16 +603,27 @@ class TextToSpeechApp(QMainWindow):
         
     def upload_voice(self):
         self.logger.info("开始上传自定义音色...")
-        dialog = UploadVoiceDialog([(self.model_combo.itemText(i), self.model_combo.itemData(i)) for i in range(self.model_combo.count())], self.model_combo.currentData(), self)
+        dialog = UploadVoiceDialog(
+            [(self.model_combo.itemText(i), self.model_combo.itemData(i)) 
+             for i in range(self.model_combo.count())], 
+            self.model_combo.currentData(), 
+            self
+        )
+        
         if dialog.exec() == QDialog.DialogCode.Accepted:
             file_path, name, text, model = dialog.get_data()
+            
             # 验证customName的有效性
             if not re.match(r'^[a-zA-Z0-9_-]{1,64}$', name):
+                self.logger.warning(f"无效的音色名称: {name}")
                 QMessageBox.warning(self, "错误", "音色名称无效。只能包含字母、数字、下划线和连字符，且不能超过64个字符。")
                 return
+                
             if not text:
+                self.logger.warning("未输入转换文本")
                 QMessageBox.warning(self, "错误", "请输入要转换的文本!")
                 return
+                
             try:
                 # 读取音频文件
                 with open(file_path, 'rb') as f:
@@ -613,22 +632,23 @@ class TextToSpeechApp(QMainWindow):
                 # 构建multipart/form-data格式的音频数据
                 audio_content = f'data:audio/mpeg;base64,{base64.b64encode(audio_data).decode("utf-8")}'
                 
-                # 使用model的实际值而不是显示名称
-                actual_model = self.model_display_to_actual.get(model, model)  # 获取映射后的模型值
+                # 使用model的实际值
+                self.logger.debug(f"上传音色参数 - 模型: {model}, 名称: {name}")
                 
                 response = self.tts_service.upload_voice(
                     audio=audio_content,
-                    model=actual_model,
+                    model=model,  # 直接使用model_combo的data值
                     customName=name,
                     text=text
                 )
+                
                 self.logger.info(f"音色上传成功: {name}")
                 QMessageBox.information(self, "成功", "音色上传成功!")
                 self.load_voice_list()  # 重新加载音色列表
+                
             except Exception as e:
                 self.logger.error(f"音色上传失败: {str(e)}", exc_info=True)
                 QMessageBox.warning(self, "错误", f"上传失败: {str(e)}")
-                print(f"详细错误信息: {e}")
         
     def select_output_directory(self):
         directory = QFileDialog.getExistingDirectory(self, "选择输出目录", self.output_directory)
