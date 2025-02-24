@@ -1,0 +1,99 @@
+name: Build Application
+
+on:
+  push:
+    branches: [ main ]
+    tags: [ 'v*' ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build:
+    name: Build on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [windows-latest, macos-latest, ubuntu-latest]
+        python-version: ['3.8']
+
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ matrix.python-version }}
+        
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install pyinstaller
+        
+    - name: Install ImageMagick
+      if: matrix.os == 'ubuntu-latest'
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y imagemagick
+        
+    - name: Install ImageMagick (macOS)
+      if: matrix.os == 'macos-latest'
+      run: |
+        brew install imagemagick
+        
+    - name: Install ImageMagick (Windows)
+      if: matrix.os == 'windows-latest'
+      run: |
+        choco install imagemagick.app -y
+        
+    - name: Generate Icons
+      shell: bash
+      run: |
+        chmod +x assets/create_icons.sh
+        ./assets/create_icons.sh
+        
+    - name: Build (Windows)
+      if: matrix.os == 'windows-latest'
+      run: |
+        pyinstaller --noconsole --add-data ".env;." --add-data "assets/*;assets" --icon "assets/icon.ico" --name "Text2Voice" main.py
+        
+    - name: Build (macOS)
+      if: matrix.os == 'macos-latest'
+      run: |
+        pyinstaller --noconsole --add-data ".env:." --add-data "assets/*:assets" --icon "assets/icon.icns" --name "Text2Voice" main.py
+        
+    - name: Build (Linux)
+      if: matrix.os == 'ubuntu-latest'
+      run: |
+        pyinstaller --noconsole --add-data ".env:." --add-data "assets/*:assets" --icon "assets/icon.png" --name "Text2Voice" main.py
+        
+    - name: Create DMG (macOS)
+      if: matrix.os == 'macos-latest'
+      run: |
+        brew install create-dmg
+        create-dmg \
+          --volname "Text2Voice" \
+          --window-pos 200 120 \
+          --window-size 800 400 \
+          --icon-size 100 \
+          --icon "Text2Voice.app" 200 190 \
+          --hide-extension "Text2Voice.app" \
+          --app-drop-link 600 185 \
+          "Text2Voice.dmg" \
+          "dist/"
+          
+    - name: Upload Artifacts
+      uses: actions/upload-artifact@v3
+      with:
+        name: Text2Voice-${{ matrix.os }}
+        path: |
+          dist/Text2Voice*
+          
+    - name: Create Release
+      if: startsWith(github.ref, 'refs/tags/')
+      uses: softprops/action-gh-release@v1
+      with:
+        files: |
+          dist/Text2Voice*
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} 

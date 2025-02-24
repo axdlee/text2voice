@@ -1,5 +1,7 @@
 # 文本转语音工具 (Text-to-Speech Tool)
 
+![Build Status](https://github.com/[your-username]/text2voice/workflows/Build%20Application/badge.svg)
+
 这是一个基于硅基流动 API 的文本转语音转换工具，提供了简洁直观的图形用户界面，支持实时文本转语音和音频播放控制。
 
 ## ✨ 功能特点
