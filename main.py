@@ -611,7 +611,7 @@ class TextToSpeechApp(QMainWindow):
         )
         
         if dialog.exec() == QDialog.DialogCode.Accepted:
-            file_path, name, text, model = dialog.get_data()
+            file_path, name, text, display_model = dialog.get_data()
             
             # 验证customName的有效性
             if not re.match(r'^[a-zA-Z0-9_-]{1,64}$', name):
@@ -632,12 +632,15 @@ class TextToSpeechApp(QMainWindow):
                 # 构建multipart/form-data格式的音频数据
                 audio_content = f'data:audio/mpeg;base64,{base64.b64encode(audio_data).decode("utf-8")}'
                 
-                # 使用model的实际值
-                self.logger.debug(f"上传音色参数 - 模型: {model}, 名称: {name}")
+                # 获取实际的模型ID
+                actual_model = self.model_combo.currentData()  # 使用 data 值而不是显示文本
+                self.logger.debug(f"上传音色参数 - 显示模型: {display_model}")
+                self.logger.debug(f"上传音色参数 - 实际模型: {actual_model}")
+                self.logger.debug(f"上传音色参数 - 名称: {name}")
                 
                 response = self.tts_service.upload_voice(
                     audio=audio_content,
-                    model=model,  # 直接使用model_combo的data值
+                    model=actual_model,  # 使用实际的模型ID
                     customName=name,
                     text=text
                 )
