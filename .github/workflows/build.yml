@@ -108,6 +108,31 @@ jobs:
         # 构建
         pyinstaller --noconsole --add-data ".env;." --add-data "assets/*;assets" --icon "assets/icon.ico" --name "Text2Voice" main.py
         
+    - name: Install macOS dependencies
+      if: runner.os == 'macOS'
+      run: |
+        # 安装 Qt6
+        brew install qt6
+        brew install python-tk
+        
+        # 同时安装 Intel 和 ARM 版本的 Qt
+        arch -x86_64 brew install qt6 || true
+        arch -arm64 brew install qt6 || true
+        
+        # 安装 PyQt6 依赖
+        python -m pip install PyQt6-Qt6
+        python -m pip install PyQt6-sip
+        
+    - name: Set macOS environment
+      if: runner.os == 'macOS'
+      run: |
+        # Intel Mac 路径
+        echo "INTEL_QT_PATH=/usr/local/opt/qt6" >> $GITHUB_ENV
+        # Apple Silicon Mac 路径
+        echo "ARM_QT_PATH=/opt/homebrew/opt/qt6" >> $GITHUB_ENV
+        # 设置通用环境变量
+        echo "QT_DEBUG_PLUGINS=1" >> $GITHUB_ENV
+        
     - name: Build (macOS)
       if: runner.os == 'macOS'
       run: |
@@ -115,23 +140,64 @@ jobs:
         echo "Checking files..."
         ls -la .env
         ls -la assets
-        # 构建
-        pyinstaller --noconsole --add-data ".env:." --add-data "assets/*:assets" --icon "assets/icon.icns" --name "Text2Voice" main.py
         
-    - name: Build (Linux)
-      if: runner.os == 'Linux'
-      run: |
-        # 确保文件存在
-        echo "Checking files..."
-        ls -la .env
-        ls -la assets
-        # 构建
-        pyinstaller --noconsole --add-data ".env:." --add-data "assets/*:assets" --icon "assets/icon.png" --name "Text2Voice" main.py
+        # Intel Mac 构建
+        echo "Building for Intel Mac..."
+        ARCH="x86_64" pyinstaller --noconsole \
+          --add-data ".env:." \
+          --add-data "assets/*:assets" \
+          --icon "assets/icon.icns" \
+          --name "Text2Voice-Intel" \
+          --add-binary "${INTEL_QT_PATH}/lib:Qt6" \
+          --add-binary "${INTEL_QT_PATH}/plugins:Qt6/plugins" \
+          --hidden-import PyQt6.QtCore \
+          --hidden-import PyQt6.QtGui \
+          --hidden-import PyQt6.QtWidgets \
+          --collect-all PyQt6 \
+          main.py
+          
+        # Apple Silicon Mac 构建
+        echo "Building for Apple Silicon Mac..."
+        ARCH="arm64" pyinstaller --noconsole \
+          --add-data ".env:." \
+          --add-data "assets/*:assets" \
+          --icon "assets/icon.icns" \
+          --name "Text2Voice-ARM" \
+          --add-binary "${ARM_QT_PATH}/lib:Qt6" \
+          --add-binary "${ARM_QT_PATH}/plugins:Qt6/plugins" \
+          --hidden-import PyQt6.QtCore \
+          --hidden-import PyQt6.QtGui \
+          --hidden-import PyQt6.QtWidgets \
+          --collect-all PyQt6 \
+          main.py
+          
+        # 创建通用二进制（Universal Binary）
+        echo "Creating Universal Binary..."
+        mkdir -p "dist/Text2Voice.app/Contents/MacOS"
+        lipo "dist/Text2Voice-Intel.app/Contents/MacOS/Text2Voice-Intel" \
+          "dist/Text2Voice-ARM.app/Contents/MacOS/Text2Voice-ARM" \
+          -create -output "dist/Text2Voice.app/Contents/MacOS/Text2Voice"
+          
+        # 复制资源文件
+        cp -R "dist/Text2Voice-Intel.app/Contents/Resources" "dist/Text2Voice.app/Contents/"
+        cp -R "dist/Text2Voice-Intel.app/Contents/Info.plist" "dist/Text2Voice.app/Contents/"
         
     - name: Create DMG (macOS)
       if: runner.os == 'macOS'
       run: |
         brew install create-dmg
+        
+        # 确保应用程序有正确的权限
+        chmod +x "dist/Text2Voice.app/Contents/MacOS/Text2Voice"
+        
+        # 修复 Info.plist
+        /usr/libexec/PlistBuddy -c "Add :LSMinimumSystemVersion string 11.0" "dist/Text2Voice.app/Contents/Info.plist"
+        /usr/libexec/PlistBuddy -c "Add :NSHighResolutionCapable bool true" "dist/Text2Voice.app/Contents/Info.plist"
+        /usr/libexec/PlistBuddy -c "Add :LSArchitecturePriority array" "dist/Text2Voice.app/Contents/Info.plist"
+        /usr/libexec/PlistBuddy -c "Add :LSArchitecturePriority: string arm64" "dist/Text2Voice.app/Contents/Info.plist"
+        /usr/libexec/PlistBuddy -c "Add :LSArchitecturePriority: string x86_64" "dist/Text2Voice.app/Contents/Info.plist"
+        
+        # 创建 DMG
         create-dmg \
           --volname "Text2Voice" \
           --window-pos 200 120 \
