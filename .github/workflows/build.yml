@@ -19,124 +19,82 @@ jobs:
     name: Build on ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
     strategy:
-      fail-fast: false  # 一个平台失败不影响其他平台
+      fail-fast: false
       matrix:
-        os: [windows-latest, macos-latest]
-        python-version: ['3.12']  # 更新到 Python 3.12
+        include:
+          - os: macos-14  # macos-14 是 M1/M2 runner
+            arch: arm64
+            python-version: '3.12'
+          - os: windows-latest
+            arch: x64
+            python-version: '3.12'
 
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
       with:
-        fetch-depth: 0  # 获取完整的历史记录用于版本信息
+        fetch-depth: 0
     
     - name: Set up Python
       uses: actions/setup-python@v5
       with:
         python-version: ${{ matrix.python-version }}
-        architecture: 'x64'
+        architecture: ${{ matrix.arch }}
         cache: 'pip'
-        check-latest: true  # 确保使用最新的补丁版本
+        check-latest: true
 
     - name: Verify Python installation
       run: |
         python --version
-        which python
+        which python || where python
         python -c "import sys; print(sys.prefix)"
         python -m pip --version
 
     # 创建必要的文件和目录
-    - name: Create necessary files and directories
+    - name: Create necessary files
       shell: bash
       run: |
-        # 创建 .env 文件
-        if [ ! -f ".env" ]; then
-          echo "Creating .env file..."
-          echo "SILICON_API_KEY=dummy_key" > .env
-        fi
+        # 创建必要目录和文件
+        mkdir -p resources assets temp logs
+        touch resources/placeholder.txt assets/placeholder.txt
+        echo "SILICON_API_KEY=dummy_key" > .env
         
-        # 创建必要目录
-        for dir in "assets" "temp" "logs" "resources"; do
-          if [ ! -d "$dir" ]; then
-            echo "Creating $dir directory..."
-            mkdir -p "$dir"
-          fi
-        done
-        
-        # 显示目录结构
         echo "Directory structure:"
         ls -la
-        
+
     - name: Install dependencies
       run: |
-        python -m pip install --upgrade pip
+        python -m pip install --upgrade pip setuptools wheel
         pip install -r requirements.txt
         pip install pyinstaller
 
-    # macOS 特定配置
-    - name: Install macOS dependencies
+    # macOS M1/M2 特定配置
+    - name: Install macOS ARM dependencies
       if: runner.os == 'macOS'
       run: |
+        # Homebrew 在 M1/M2 Mac 上的路径是固定的
+        BREW_PREFIX="/opt/homebrew"
+        echo "Using Homebrew at: $BREW_PREFIX"
+        
         # 安装系统依赖
-        brew install gettext
-        brew link gettext --force
         brew install qt6
         
-        # 验证 gettext 安装
-        echo "Checking gettext installation..."
-        ls -l /usr/local/opt/gettext/lib/
-        otool -L /usr/local/opt/gettext/lib/libintl*.dylib
-        
         # 设置环境变量
-        echo "Setting up environment variables..."
-        echo "LDFLAGS=-L/usr/local/opt/gettext/lib" >> $GITHUB_ENV
-        echo "CPPFLAGS=-I/usr/local/opt/gettext/include" >> $GITHUB_ENV
+        echo "PYTHONPATH=${GITHUB_WORKSPACE}" >> $GITHUB_ENV
+        echo "QT_PLUGIN_PATH=$BREW_PREFIX/opt/qt6/plugins" >> $GITHUB_ENV
+        echo "QT_DEBUG_PLUGINS=1" >> $GITHUB_ENV
         
-        # 安装 Python 依赖
-        echo "Installing Python dependencies..."
-        python -m pip install --upgrade pip setuptools wheel
-        
-        # 安装 PyQt6
-        python -m pip install PyQt6>=6.4.2
-        python -m pip install PyQt6-Qt6>=6.4.2
-        python -m pip install PyQt6-sip>=13.4.1
-        
-        # 安装 pygame
-        python -m pip install pygame>=2.5.2
+        # 显示 Qt 安装信息
+        brew list qt6 --verbose
         
         echo "Installed packages:"
         pip list
 
-    - name: Set macOS environment
-      if: runner.os == 'macOS'
-      run: |
-        echo "QT_DEBUG_PLUGINS=1" >> $GITHUB_ENV
-        echo "PYTHONPATH=${GITHUB_WORKSPACE}" >> $GITHUB_ENV
-        echo "DYLD_LIBRARY_PATH=/usr/local/opt/gettext/lib:$DYLD_LIBRARY_PATH" >> $GITHUB_ENV
-        
     # Windows 构建
     - name: Build (Windows)
       if: runner.os == 'Windows'
       shell: cmd
       run: |
-        # 检查目录结构
-        dir
-        
-        # 确保必要目录存在
-        if not exist "resources" mkdir resources
-        if not exist "assets" mkdir assets
-        if not exist "temp" mkdir temp
-        if not exist "logs" mkdir logs
-        
-        # 创建一个空的资源文件，确保目录不为空
-        echo. > resources\placeholder.txt
-        echo. > assets\placeholder.txt
-        
-        # 显示目录结构
-        echo "Directory structure after creation:"
-        dir /s
-        
-        # 执行构建
         pyinstaller ^
         --noconsole ^
         --add-data ".env;." ^
@@ -153,31 +111,16 @@ jobs:
         --hidden-import pygame ^
         main.py
 
-    # macOS 构建
-    - name: Build (macOS)
+    # macOS ARM 构建
+    - name: Build (macOS ARM)
       if: runner.os == 'macOS'
       run: |
-        # 检查目录结构
-        ls -la
-        
-        # 确保必要目录存在
-        mkdir -p resources assets temp logs
-        
-        # 创建占位文件
-        touch resources/placeholder.txt
-        touch assets/placeholder.txt
-        
-        # 显示目录结构
-        echo "Directory structure after creation:"
-        find . -type d
-        
-        # 执行构建
         pyinstaller --noconsole \
           --add-data ".env:." \
           --add-data "assets:assets" \
           --add-data "resources:resources" \
           --add-data "ui/styles:ui/styles" \
-          --name "Text2Voice-Intel" \
+          --name "Text2Voice-ARM" \
           --hidden-import PyQt6.QtCore \
           --hidden-import PyQt6.QtGui \
           --hidden-import PyQt6.QtWidgets \
@@ -187,48 +130,36 @@ jobs:
           --hidden-import pygame \
           main.py
 
-    # 创建 DMG (macOS)
-    - name: Create DMG (macOS)
+    # 创建 DMG (macOS ARM)
+    - name: Create DMG (macOS ARM)
       if: runner.os == 'macOS'
       run: |
-        brew install create-dmg || exit 1
+        brew install create-dmg
+        chmod +x "dist/Text2Voice-ARM.app/Contents/MacOS/Text2Voice-ARM"
         
-        # 确保执行权限
-        chmod +x "dist/Text2Voice-Intel.app/Contents/MacOS/Text2Voice-Intel"
-        
-        # 添加错误处理
-        if ! create-dmg \
+        create-dmg \
           --volname "Text2Voice" \
           --window-pos 200 120 \
           --window-size 800 400 \
           --icon-size 100 \
-          --icon "Text2Voice-Intel.app" 200 190 \
-          --hide-extension "Text2Voice-Intel.app" \
+          --icon "Text2Voice-ARM.app" 200 190 \
+          --hide-extension "Text2Voice-ARM.app" \
           --app-drop-link 600 185 \
-          "Text2Voice-Intel.dmg" \
-          "dist/"; then
-          echo "DMG creation failed"
-          exit 1
-        fi
+          "Text2Voice-ARM.dmg" \
+          "dist/" || exit 1
 
     # 打包制品
     - name: Zip Artifacts
       shell: bash
       run: |
-        echo "Creating zip archives..."
         cd dist || exit 1
-        
         if [ "${{ runner.os }}" == "Windows" ]; then
           7z a ../Text2Voice-windows-latest.zip ./* || exit 1
-          echo "Windows zip created successfully"
         elif [ "${{ runner.os }}" == "macOS" ]; then
-          zip -r ../Text2Voice-macos-intel-latest.zip ./* || exit 1
-          echo "macOS zip created successfully"
+          zip -r ../Text2Voice-macos-arm-latest.zip ./* || exit 1
         fi
-        
         cd ..
         
-        # 显示创建的文件
         echo "Created files:"
         ls -lh Text2Voice-*.zip Text2Voice-*.dmg 2>/dev/null || true
 
@@ -236,7 +167,7 @@ jobs:
     - name: Upload Artifacts
       uses: actions/upload-artifact@v4
       with:
-        name: Text2Voice-${{ runner.os }}
+        name: Text2Voice-${{ matrix.os }}-${{ matrix.arch }}
         path: |
           Text2Voice-*.zip
           Text2Voice-*.dmg
@@ -256,22 +187,16 @@ jobs:
           - 版本: ${{ github.ref_name }}
           - 时间: ${{ github.event.head_commit.timestamp }}
           - 提交: ${{ github.event.head_commit.message }}
-          - 分支: ${{ github.ref_name }}
           
           ### 下载
           - Windows 版本: Text2Voice-windows-latest.zip
-          - macOS Intel 版本: Text2Voice-macos-intel-latest.zip
-          - DMG 安装包: Text2Voice-Intel.dmg
-          
-          ### 更新说明
-          {{ 请在此处添加版本更新说明 }}
+          - macOS ARM (M1/M2) 版本: Text2Voice-macos-arm-latest.zip
+          - macOS ARM DMG: Text2Voice-ARM.dmg
           
         files: |
           Text2Voice-windows-latest.zip
-          Text2Voice-macos-intel-latest.zip
-          Text2Voice-*.dmg
-        draft: false
-        prerelease: false
+          Text2Voice-macos-arm-latest.zip
+          Text2Voice-ARM.dmg
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
