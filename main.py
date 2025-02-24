@@ -5,7 +5,8 @@ from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
                            QHBoxLayout, QTextEdit, QPushButton, QLabel, 
                            QListWidget, QMessageBox, QComboBox, QProgressBar, 
                            QDialog, QLineEdit, QFormLayout, QDialogButtonBox, 
-                           QFileDialog, QInputDialog, QDoubleSpinBox, QListWidgetItem)
+                           QFileDialog, QInputDialog, QDoubleSpinBox, QListWidgetItem,
+                           QFrame)
 from PyQt6.QtCore import Qt, QThread, pyqtSignal
 import requests
 from dotenv import load_dotenv
@@ -784,9 +785,37 @@ class TextToSpeechApp(QMainWindow):
         try:
             dialog = QDialog(self)
             dialog.setWindowTitle('自定义音色列表')
+            dialog.setMinimumWidth(600)  # 设置最小宽度
             layout = QVBoxLayout()
             
-            # 创建新的 QListWidget
+            # 创建表头
+            header_container = QWidget()
+            header_layout = QHBoxLayout(header_container)
+            header_layout.setContentsMargins(10, 5, 10, 5)
+            
+            model_header = QLabel("模型")
+            name_header = QLabel("自定义名称")
+            operation_header = QLabel("操作")
+            
+            # 设置固定宽度
+            model_header.setFixedWidth(200)
+            name_header.setFixedWidth(200)
+            operation_header.setFixedWidth(100)
+            
+            header_layout.addWidget(model_header)
+            header_layout.addWidget(name_header)
+            header_layout.addWidget(operation_header)
+            header_layout.addStretch()
+            
+            layout.addWidget(header_container)
+            
+            # 创建分割线
+            line = QFrame()
+            line.setFrameShape(QFrame.Shape.HLine)
+            line.setFrameShadow(QFrame.Shadow.Sunken)
+            layout.addWidget(line)
+            
+            # 创建列表
             custom_voice_list = QListWidget()
             
             # 加载音色列表
@@ -807,15 +836,31 @@ class TextToSpeechApp(QMainWindow):
                     # 创建容器
                     container = QWidget()
                     layout_item = QHBoxLayout(container)
+                    layout_item.setContentsMargins(10, 5, 10, 5)
                     
-                    # 添加音色信息标签
-                    name_label = QLabel(f"{voice_name} ({voice_model})")
+                    # 添加模型名称
+                    model_label = QLabel(voice_model)
+                    model_label.setFixedWidth(200)
+                    layout_item.addWidget(model_label)
+                    
+                    # 添加自定义名称
+                    name_label = QLabel(voice_name)
+                    name_label.setFixedWidth(200)
                     layout_item.addWidget(name_label)
+                    
+                    # 创建操作按钮容器
+                    button_container = QWidget()
+                    button_layout = QHBoxLayout(button_container)
+                    button_layout.setContentsMargins(0, 0, 0, 0)
                     
                     # 创建删除按钮
                     delete_button = QPushButton('删除')
+                    delete_button.setFixedWidth(80)
                     delete_button.clicked.connect(lambda checked, vid=voice_id: self.delete_voice_and_refresh(vid, custom_voice_list))
-                    layout_item.addWidget(delete_button)
+                    button_layout.addWidget(delete_button)
+                    
+                    layout_item.addWidget(button_container)
+                    layout_item.addStretch()
                     
                     # 创建列表项
                     item = QListWidgetItem()
@@ -833,9 +878,13 @@ class TextToSpeechApp(QMainWindow):
             layout.addWidget(custom_voice_list)
             
             # 添加关闭按钮
+            button_layout = QHBoxLayout()
             close_button = QPushButton('关闭')
+            close_button.setFixedWidth(100)
             close_button.clicked.connect(dialog.accept)
-            layout.addWidget(close_button)
+            button_layout.addStretch()
+            button_layout.addWidget(close_button)
+            layout.addLayout(button_layout)
             
             dialog.setLayout(layout)
             dialog.exec()
