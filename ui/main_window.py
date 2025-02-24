@@ -116,12 +116,12 @@ class MainWindow(BaseMainWindow):
             
     def show_custom_voice_list(self):
         """显示自定义音色列表"""
-        if not self.core.tts_service:
-            self.show_error("请先设置API密钥!")
-            return
-            
-        dialog = VoiceListDialog(self, self.core.tts_service)
-        dialog.exec()
+        try:
+            dialog = VoiceListDialog(self)
+            dialog.exec()
+        except Exception as e:
+            self.logger.error("显示音色列表失败", exc_info=True)
+            self.show_error(f"显示音色列表失败: {str(e)}")
 
     def upload_voice(self):
         """上传自定义音色"""
@@ -132,4 +132,30 @@ class MainWindow(BaseMainWindow):
         dialog = UploadVoiceDialog(self, self.core.tts_service)
         if dialog.exec() == QDialog.DialogCode.Accepted:
             # 刷新音色列表
-            self.conversion_panel.refresh_voices() 
+            self.conversion_panel.refresh_voices()
+
+    def delete_voice_and_refresh(self, voice_id: str, voice_list_dialog):
+        """删除音色并刷新列表
+        Args:
+            voice_id: 要删除的音色ID
+            voice_list_dialog: 音色列表对话框
+        """
+        try:
+            # 删除音色
+            self.core.tts_service.delete_voice(voice_id)
+            
+            # 获取当前选中的模型
+            current_model = self.conversion_panel.model_combo.currentData()
+            
+            # 刷新音色列表对话框
+            voice_list_dialog.refresh_voices()
+            
+            # 刷新主窗口的音色列表
+            self.conversion_panel.refresh_voices(current_model)
+            
+            # 显示成功消息
+            self.show_info(f"音色删除成功!")
+            
+        except Exception as e:
+            self.logger.error("删除音色失败", exc_info=True)
+            self.show_error(f"删除失败: {str(e)}") 
