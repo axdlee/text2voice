@@ -1,12 +1,12 @@
 from typing import Optional, Dict, Any
 from utils.logger import get_child_logger
-from api_client import SiliconFlowClient
+from api.client_factory import TTSClientFactory
 
 class TTSService:
     """文本转语音服务"""
     def __init__(self, api_key: str, api_url: Optional[str] = None):
         self.logger = get_child_logger('tts_service')
-        self.client = SiliconFlowClient(api_key, api_url)
+        self.client = TTSClientFactory.create_client('silicon_flow', api_key, api_url)
         
     def convert_text(self, text: str, params: Dict[str, Any]) -> bytes:
         """转换文本到语音"""

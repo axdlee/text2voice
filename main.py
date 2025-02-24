@@ -1,5 +1,4 @@
 import sys
-import json
 import os
 from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, 
                            QHBoxLayout, QTextEdit, QPushButton, QLabel, 
@@ -8,11 +7,8 @@ from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
                            QFileDialog, QInputDialog, QDoubleSpinBox, QListWidgetItem,
                            QFrame)
 from PyQt6.QtCore import Qt, QThread, pyqtSignal
-import requests
 from dotenv import load_dotenv
-from api_client import SiliconFlowClient
-from audio_player import AudioPlayer
-from typing import Dict, Any
+from api.silicon_flow_client import SiliconFlowClient
 import base64
 import re
 import time
