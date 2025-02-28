@@ -79,7 +79,9 @@ class MainWindow(BaseMainWindow):
             
             # 生成文件名 (使用前20个字符作为文件名)
             text = self.conversion_panel.text_input.toPlainText()[:20]
-            filename = f"{text}_{int(time.time())}.{self.conversion_panel.format_combo.currentText()}"
+            # 文件名去掉换行符，逗号，引号，感叹号，问号等等特殊字符，仅保留汉字和字母及下划线
+            filename = re.sub(r'[^\u4e00-\u9fa5a-zA-Z0-9_]', '', text)
+            filename = f"{filename}_{int(time.time())}.{self.conversion_panel.format_combo.currentText()}"
             
             # 保存音频文件
             filepath = self.core.audio_mgr.save_audio(result, filename, output_dir)
