@@ -75,7 +75,7 @@ class SiliconFlowClient(BaseTTSClient):
                 "input": text,
                 "voice": kwargs.get('voice_id') or self.DEFAULT_VOICES[kwargs.get('model', self.DEFAULT_MODEL)][0],
                 "response_format": kwargs.get('response_format', "mp3"),
-                "sample_rate": int(kwargs.get('sample_rate', 32000)),
+                #"sample_rate": int(kwargs.get('sample_rate', 32000)),
                 "stream": True,
                 "speed": float(kwargs.get('speed', 1.0)),
                 "gain": float(kwargs.get('gain', 0.0))
